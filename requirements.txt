@@ -1,7 +1,10 @@
+tqdm
 numpy
 scipy
 pandas
 cartopy
+pathlib
+datetime
 openpyxl
 geopandas
 matplotlib

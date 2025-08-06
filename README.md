@@ -4,7 +4,8 @@
 This repository contains GRACE and GRACE-FO satellite data alongside Python scripts to process Level 2 data, generate gravity anomaly maps, and analyze temporal trends in Earth's gravity field.
 
 ## Contents
-- **Data/** — Raw and processed GRACE and GRACE-FO datasets
+- **Data** — Contains raw and parsed GRACE and GRACE-FO datasets from 2002 through August 2025, along with a script for reading the data.
+
 - **scripts/** — Python scripts for data processing and visualization
 - **notebooks/** — Jupyter notebooks demonstrating usage and analysis
 - **results/** — Generated gravity maps and trend analysis outputs
