@@ -1,0 +1,8 @@
+numpy
+scipy
+pandas
+cartopy
+openpyxl
+geopandas
+matplotlib
+collections

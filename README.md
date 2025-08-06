@@ -18,10 +18,13 @@ This repository contains GRACE and GRACE-FO satellite data alongside Python scri
 ## Requirements
 - Python 3.8+
 - numpy
-- pandas
-- matplotlib
-- cartopy
 - scipy
+- pandas
+- cartopy
+- openpyxl
+- geopandas
+- matplotlib
+- collections
 
 Install dependencies via:
 ```bash
