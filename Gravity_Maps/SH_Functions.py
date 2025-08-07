@@ -1,6 +1,39 @@
-'''
-DOCSTRING
-'''
+"""
+Spherical Harmonics Functions for GRACE and GRACE-FO Data
+
+This module provides functions to compute and visualize Earth's gravity field 
+based on GRACE and GRACE-FO satellite data using spherical harmonic synthesis. 
+It includes support for generating gravity values across custom-defined 
+coordinate grids, as well as rendering them into visual heatmaps.
+
+Main Features:
+--------------
+- `spherical_harmonics_date`:
+    Computes gravity acceleration and potential on a coordinate grid 
+    for a single GRACE dataset (single date).
+    
+- `spherical_harmonics_baseline`:
+    Averages gravity data across all dates to produce a baseline 
+    gravity field for comparison.
+
+- `render_single`:
+    Renders a single gravity heatmap projected on a cropped world map 
+    for the given spatial extent.
+
+- `render_double`:
+    Renders two gravity heatmaps side by side for comparing different 
+    dates over the same spatial region.
+
+Dependencies:
+-------------
+- `os`
+- `tqdm`
+- `openpyxl`
+- `numpy`
+- `pandas`
+- `matplotlib`
+- `scipy`
+"""
 
 # External Imports
 import os

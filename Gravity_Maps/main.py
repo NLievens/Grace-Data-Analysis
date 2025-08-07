@@ -1,6 +1,50 @@
-'''
-DOCSTRING
-'''
+"""
+GRACE Data Visualization Interface
+
+This script provides a user-interactive CLI for rendering gravity field heatmaps 
+from GRACE and GRACE-FO satellite data. It supports single-date, double-date, 
+and baseline visualizations, allowing custom spatial resolution and geographic zones.
+
+Main Features:
+--------------
+- CLI menu for choosing between:
+    1. Single-date heatmap rendering
+    2. Double-date comparative heatmap
+    3. Baseline (average) gravity field heatmap
+- Dynamic date selection based on available GRACE datasets
+- Optional custom settings for:
+    - Latitude/Longitude precision (grid resolution)
+    - Latitude/Longitude range (analysis zone)
+- Clears and updates terminal output for a clean interface
+- Exports processed data to Excel for external use
+
+Dependencies:
+-------------
+- `numpy`
+- `sys`
+- `os`
+
+Internal Modules:
+-----------------
+- `Data_Reader` : Loads and structures parsed GRACE data
+- `SH_Functions` : Performs spherical harmonic synthesis and rendering
+
+Output:
+-------
+- Visual heatmaps rendered from GRACE data
+- Excel files containing processed gravity field values (if enabled)
+
+User Inputs:
+------------
+- Analysis mode (single, double, baseline)
+- Year and date selection from available datasets
+- Optional spatial resolution and geographic bounds
+
+Raises:
+-------
+- `ValueError` / `IndexError` for invalid user input
+- Exits gracefully with an error message if selections are out of bounds
+"""
 
 # External Imports
 import os
