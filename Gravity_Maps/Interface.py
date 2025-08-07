@@ -5,12 +5,14 @@ DOCSTRING
 # External Imports
 import os
 import sys
+import tqdm
 import numpy as np
+import pandas as pd
 
 # Internal Imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from Data.Data_Reader import data_year_arr, date_year_arr
-from SH_Functions import cs_spherical_harmonics, cs_render_single, cs_render_double
+from Data.Data_Reader import data_year_arr, date_year_arr, data_lib, sorted_date_lst
+from SH_Functions import spherical_harmonics_date, spherical_harmonics_baseline, render_single, render_double
 
 # Functions
 def clear_lines(n):
@@ -129,10 +131,10 @@ if mod_choice == '1':
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
     # Define Gravity Values
-    earth_grid_pot, earth_grid_acc = cs_spherical_harmonics(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name='Single Date Heatmap.xlsx')
+    earth_grid_acc = spherical_harmonics_date(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name='Single Date Heatmap.xlsx')
 
     # Render Heatmap
-    cs_render_single(earth_grid_acc, selected_date, lat_range=lat_range, lon_range=lon_range)
+    render_single(earth_grid_acc, selected_date, lat_range=lat_range, lon_range=lon_range)
 
 elif mod_choice == '2':
     # Print Confirmation Statement
@@ -241,15 +243,66 @@ elif mod_choice == '2':
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
     # Define Gravity Values
-    earth_grid_pot_1, earth_grid_acc_1 = cs_spherical_harmonics(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
-    earth_grid_pot_2, earth_grid_acc_2 = cs_spherical_harmonics(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
+    earth_grid_acc_1 = spherical_harmonics_date(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
+    earth_grid_acc_2 = spherical_harmonics_date(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
 
     # Render Heatmap
-    cs_render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=lat_range, lon_range=lon_range)
+    render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=lat_range, lon_range=lon_range)
 
 elif mod_choice == '3':
     # Print Confirmation Statement
     print('\n=== Baseline Heatmap ===\n')
+
+    # Define Standard Or Custom Precision
+    acc_choice = input("Custom Precision? (Y/N): ").strip().lower()
+    custom_length = 4
+
+    if acc_choice == 'y':
+        custom_length += 2
+        lat_precis = int(input("Latitude Precision (e.g. 30): ").strip() or 30)
+        lon_precis = int(input("Longitude Precision (e.g. 60): ").strip() or 60)
+    
+    else:
+        lat_precis = 30
+        lon_precis = 60
+    
+    # Define Standard Or Custom Zone
+    zon_choice = input("\nCustom Analysis Zone? (Y/N): ").strip().lower()
+
+    if zon_choice == 'y':
+        custom_length += 4
+        lat_min = float(input("Min Latitude [deg]: ").strip() or -90)
+        lat_max = float(input("Max Latitude [deg]: ").strip() or 90)
+        lon_min = float(input("Min Longitude [deg]: ").strip() or -180)
+        lon_max = float(input("Max Longitude [deg]: ").strip() or 180)
+
+        # Convert to radians
+        lat_range = (np.radians(lat_min), np.radians(lat_max))
+        lon_range = (np.radians(lon_min), np.radians(lon_max))
+    
+    else:
+        lat_min = -90
+        lat_max = 90
+        lon_min = -180
+        lon_max = 180
+
+        # Convert to radians
+        lat_range = (np.radians(lat_min), np.radians(lat_max))
+        lon_range = (np.radians(lon_min), np.radians(lon_max))
+    
+    # Print Settings Overview
+    clear_lines(custom_length)
+
+    print(f"\nLatitude Precision  ➜  {lat_precis}")
+    print(f"Longitude Precision ➜  {lon_precis}")
+    print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
+    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
+
+    # Define Gravity Values
+    earth_grid_acc_avg = spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range)
+
+    # Render Heatmap
+    render_single(earth_grid_acc_avg, "Baseline", lat_range=lat_range, lon_range=lon_range)
 
 else:
     # Print Confirmation Statement
