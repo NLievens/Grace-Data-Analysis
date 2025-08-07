@@ -66,9 +66,9 @@ def clear_lines(n):
 print("""
 === GRACE Data Selection Menu ===
       
-1. Render Heatmap Of A Single Date
-2. Render Heatmap Of A Two Dates
-3. Render Baseline Heatmap
+1. Render Heatmap Of A Single Date [mGal]
+2. Render Heatmap Of A Two Dates [mGal]
+3. Render Baseline Heatmap [mGal]
 """)
 
 mod_choice = input("Enter Your Choice: ").strip()
