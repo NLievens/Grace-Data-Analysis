@@ -4,7 +4,6 @@ DOCSTRING
 
 # External Imports
 import os
-import sys
 import tqdm
 import openpyxl
 import numpy as np

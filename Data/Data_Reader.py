@@ -29,6 +29,10 @@ Output Variables:
     A 5D array with shape (n_years, 12, 97, 97, 4) containing the data
 - `date_year_arr` : np.ndarray
     A 2D array with shape (n_years, 12) containing date strings or `"empty"`
+- `data_lib` : list
+    List of dicts with shape (236,) containing date strings and corresponding data arrays
+- `sorted_date_lst` : list
+    List of reformatted dates as DDMMYYYY_DDMMYYYY strings for sorting with shape (236,)
 
 Raises:
 -------
@@ -153,3 +157,7 @@ for year_idx, date_year_lst_row in enumerate(date_year_lst):
 
 # Transform To Array
 date_year_arr = np.array(date_year_lst)
+
+
+print(type(sorted_date_lst))
+print(np.shape(sorted_date_lst))
