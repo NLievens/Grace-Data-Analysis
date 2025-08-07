@@ -11,7 +11,7 @@ Main Features:
 - Extracts date information from each file and stores it in `DDMMYYYY_DDMMYYYY` format.
 - Parses data into a structured 3D NumPy array [degree, order, values].
 - Organizes data by year and month into a 5D array of shape: 
-  [n_years, 12 months, 97, 97, 4] (where 4 = [clm, slm, clm_std, slm_std]).
+  (n_years, 12 months, 97, 97, 4) (where 4 = [clm, slm, clm_std, slm_std]).
 - Maps monthly time points into a uniform structure, inserting `"empty"` if data is missing.
 - Builds a structured date array aligned with the data array.
 
@@ -26,9 +26,9 @@ Dependencies:
 Output Variables:
 -----------------
 - `data_year_arr` : np.ndarray
-    A 5D array with shape [n_years, 12, 97, 97, 4] containing the data
+    A 5D array with shape (n_years, 12, 97, 97, 4) containing the data
 - `date_year_arr` : np.ndarray
-    A 2D array with shape [n_years, 12] containing date strings or `"empty"`
+    A 2D array with shape (n_years, 12) containing date strings or `"empty"`
 
 Raises:
 -------
