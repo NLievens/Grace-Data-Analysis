@@ -157,7 +157,3 @@ for year_idx, date_year_lst_row in enumerate(date_year_lst):
 
 # Transform To Array
 date_year_arr = np.array(date_year_lst)
-
-
-print(type(sorted_date_lst))
-print(np.shape(sorted_date_lst))
