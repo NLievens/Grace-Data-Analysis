@@ -10,7 +10,7 @@ import numpy as np
 # Internal Imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.Data_Reader import data_year_arr, date_year_arr
-from SH_Functions import cs_spherical_harmonics, cs_render_single
+from SH_Functions import cs_spherical_harmonics, cs_render_single, cs_render_double
 
 # Functions
 def clear_lines(n):
@@ -132,7 +132,7 @@ if mod_choice == '1':
     earth_grid_pot, earth_grid_acc = cs_spherical_harmonics(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name='Single Date Heatmap.xlsx')
 
     # Render Heatmap
-    cs_render_single(earth_grid_acc, selected_date, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range)
+    cs_render_single(earth_grid_acc, selected_date, lat_range=lat_range, lon_range=lon_range)
 
 elif mod_choice == '2':
     # Print Confirmation Statement
@@ -240,9 +240,12 @@ elif mod_choice == '2':
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
+    # Define Gravity Values
+    earth_grid_pot_1, earth_grid_acc_1 = cs_spherical_harmonics(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
+    earth_grid_pot_2, earth_grid_acc_2 = cs_spherical_harmonics(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
 
-
-
+    # Render Heatmap
+    cs_render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=lat_range, lon_range=lon_range)
 
 elif mod_choice == '3':
     # Print Confirmation Statement
