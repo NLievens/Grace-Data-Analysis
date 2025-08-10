@@ -167,8 +167,8 @@ if mod_choice == '1':
     # Print Settings Overview
     clear_lines(custom_length)
 
-    print(f"\nLatitude Precision  ➜  {lat_precis}")
-    print(f"Longitude Precision ➜  {lon_precis}")
+    print(f"\nLatitude Precision  ➜  {lat_precis} Points")
+    print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
@@ -279,8 +279,8 @@ elif mod_choice == '2':
     # Print Settings Overview
     clear_lines(custom_length)
 
-    print(f"\nLatitude Precision  ➜  {lat_precis}")
-    print(f"Longitude Precision ➜  {lon_precis}")
+    print(f"\nLatitude Precision  ➜  {lat_precis} Points")
+    print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
@@ -335,8 +335,8 @@ elif mod_choice == '3':
     # Print Settings Overview
     clear_lines(custom_length)
 
-    print(f"\nLatitude Precision  ➜  {lat_precis}")
-    print(f"Longitude Precision ➜  {lon_precis}")
+    print(f"\nLatitude Precision  ➜  {lat_precis} Points")
+    print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 

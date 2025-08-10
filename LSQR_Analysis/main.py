@@ -228,8 +228,8 @@ if mod_choice == '1':
 
     print(f"Analysis Dataset    ➜  {year_lst}")
     print(f"Chosen Sample Time  ➜  {sample_time} Days")
-    print(f"Latitude Precision  ➜  {lat_precis}")
-    print(f"Longitude Precision ➜  {lon_precis}")
+    print(f"Latitude Precision  ➜  {lat_precis} Points")
+    print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
