@@ -54,7 +54,7 @@ import numpy as np
 # Internal Imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.Data_Reader import data_year_arr, date_year_arr, data_lib, sorted_date_lst
-from SH_Functions import spherical_harmonics_date, spherical_harmonics_baseline, render_single, render_double
+from SH_Functions import *
 
 # Functions
 def clear_lines(n):
@@ -66,9 +66,9 @@ def clear_lines(n):
 print("""
 === GRACE Data Selection Menu ===
       
-1. Render Heatmap Of A Single Date [mGal]
-2. Render Heatmap Of A Two Dates [mGal]
-3. Render Baseline Heatmap [mGal]
+1. Render Heatmap Of A Single Date [m/s\u00B2]
+2. Render Heatmap Of A Two Dates [m/s\u00B2]
+3. Render Baseline Heatmap [m/s\u00B2]
 """)
 
 mod_choice = input("Enter Your Choice: ").strip()
@@ -129,7 +129,7 @@ if mod_choice == '1':
 
     # Define Standard Or Custom Precision
     acc_choice = input("Custom Precision? (Y/N): ").strip().lower()
-    custom_length = 4
+    custom_length = 6
 
     if acc_choice == 'y':
         custom_length += 2
@@ -164,6 +164,15 @@ if mod_choice == '1':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Save Data To Excel
+    xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
+
+    if xlsx_choice == 'y':
+        save_xlsx = True
+    
+    else:
+        save_xlsx = False
+    
     # Print Settings Overview
     clear_lines(custom_length)
 
@@ -173,7 +182,7 @@ if mod_choice == '1':
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
     # Define Gravity Values
-    earth_grid_acc = spherical_harmonics_date(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name='Single Date Heatmap.xlsx')
+    earth_grid_acc = spherical_harmonics_date(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx, file_name='Single Date Heatmap.xlsx')
 
     # Render Heatmap
     render_single(earth_grid_acc, selected_date, lat_range=lat_range, lon_range=lon_range)
@@ -241,7 +250,7 @@ elif mod_choice == '2':
         
     # Define Standard Or Custom Precision
     acc_choice = input("Custom Precision? (Y/N): ").strip().lower()
-    custom_length = 4
+    custom_length = 6
 
     if acc_choice == 'y':
         custom_length += 2
@@ -276,6 +285,15 @@ elif mod_choice == '2':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Save Data To Excel
+    xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
+
+    if xlsx_choice == 'y':
+        save_xlsx = True
+    
+    else:
+        save_xlsx = False
+    
     # Print Settings Overview
     clear_lines(custom_length)
 
@@ -285,8 +303,9 @@ elif mod_choice == '2':
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
     # Define Gravity Values
-    earth_grid_acc_1 = spherical_harmonics_date(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
-    earth_grid_acc_2 = spherical_harmonics_date(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
+    earth_grid_acc_1 = spherical_harmonics_date(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
+    print()
+    earth_grid_acc_2 = spherical_harmonics_date(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
 
     # Render Heatmap
     render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=lat_range, lon_range=lon_range)
@@ -297,7 +316,7 @@ elif mod_choice == '3':
 
     # Define Standard Or Custom Precision
     acc_choice = input("Custom Precision? (Y/N): ").strip().lower()
-    custom_length = 4
+    custom_length = 6
 
     if acc_choice == 'y':
         custom_length += 2
@@ -332,6 +351,15 @@ elif mod_choice == '3':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Save Data To Excel
+    xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
+
+    if xlsx_choice == 'y':
+        save_xlsx = True
+    
+    else:
+        save_xlsx = False
+
     # Print Settings Overview
     clear_lines(custom_length)
 
@@ -341,7 +369,7 @@ elif mod_choice == '3':
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
     # Define Gravity Values
-    earth_grid_acc_avg = spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range)
+    earth_grid_acc_avg = spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx)
 
     # Render Heatmap
     render_single(earth_grid_acc_avg, "Baseline", lat_range=lat_range, lon_range=lon_range)

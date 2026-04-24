@@ -10,8 +10,8 @@ from datetime import date
 
 # Internal Imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from Data.Data_Reader import data_year_arr, date_year_arr, data_lib, sorted_date_lst
-from LSQR_Functions import LSQR_coefficients, EWH_grid, render_single
+from Data.Data_Reader import *
+from LSQR_Functions import *
 
 # Functions
 def clear_lines(n):

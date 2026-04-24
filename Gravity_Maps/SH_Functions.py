@@ -45,7 +45,7 @@ import matplotlib.pyplot as plt
 from scipy.special import lpmv, factorial
 
 # Define Spherical Harmonics Functions
-def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), J2=False, excel_output=True, file_name='output.xlsx'):
+def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), J2=False, save_xlsx=False, file_name='output.xlsx'):
     """
     Args:
         data_array: 3D array with shape (97, 97, 4) of C and S coefficients and their standard deviations
@@ -54,7 +54,7 @@ def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range
         lat_range: tuple of minimum and maximum lattitude in radians
         lon_range: tuple of minimum and maximum longitude in radians
         J2: include (True) or exclude (False)
-        excel_output: create excel sheet (True) or not (False)
+        save_xlsx: create excel sheet (True) or not (False)
         file_name: data output name file (Always add .xlsx)
     
     Returns:
@@ -65,88 +65,88 @@ def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range
         always close the excel file before running
     """
 
-    # Define Constants
-    mu = 3.9860044150e+5  # In km^3/s^2
-    Re = 6378.13630000  # In km
-    r = Re  # Gravity measured at Earth's surface
-
-    # Define Coordinate Grid In Radians
-    colat_range = (((np.pi / 2) - lat_range[1]), ((np.pi / 2) - lat_range[0]))  # Convert latitude into colatitude and switch the order around such that the first value is closest to the North Pole
+    # Define Coordinate Grid
+    colat_range = ((np.pi / 2) - lat_range[1], (np.pi / 2) - lat_range[0])
     colat_array = np.linspace(colat_range[0], colat_range[1], lat_precis)
-    colon_range = ((lon_range[0] + np.pi), (lon_range[1] + np.pi))  # Convert longitude into colongitude
+    
+    colon_range = (lon_range[0] + np.pi, lon_range[1] + np.pi)
     colon_array = np.linspace(colon_range[0], colon_range[1], lon_precis)
-    earth_grid_pot = np.zeros((len(colat_array), len(colon_array)))
-    earth_grid_acc = np.zeros((len(colat_array), len(colon_array)))
 
-    # Format Data
-    trimmed_data = data_array[2:, :, :-2] # Remove Degree 0 And 1 Rows And Standard Deviations
-    C_array = trimmed_data[:, :, 0]
-    S_array = trimmed_data[:, :, 1]
+    # Define Constants
+    mu = 3.9860044150e+5 
+    Re = 6378.13630000 
+    r = Re
     
-    # Set Up Coefficient Array
-    row_values = np.arange(2, 97)[:, np.newaxis]  # Shape (95, 1), degree n from 2 to 96
-    col_values = np.arange(0, 97)[np.newaxis, :]  # Shape (1, 97), order m from 0 to 96
-
-    rows = np.tile(row_values, (1, 97))  # Shape (95, 97)
-    cols = np.tile(col_values, (95, 1))  # Shape (95, 97)
-
-    coefficient_array = np.stack((rows, cols), axis=-1)  # Shape (95, 97, 2), First = Degree (n), Second = Order (m)
-
-    n = coefficient_array[:, :, 0]
-    m = coefficient_array[:, :, 1]
+    # Degrees n (2 to 96) And Orders m (0 to 96)
+    n_vals = np.arange(2, 97)[:, np.newaxis] # (95, 1)
+    m_vals = np.arange(0, 97)[np.newaxis, :] # (1, 97)
     
-    # Define Normalization For Associated Legendre Polynomials
-    valid_mask = m <= n # Mask invalid entries where m > n (those are not valid for Legendre)
-    delta_0_m = (m == 0).astype(np.float64)  # 1 if m == 0 else 0
+    # Broadcast To (95, 97) Shape Automatically
+    n = np.broadcast_to(n_vals, (95, 97))
+    m = np.broadcast_to(m_vals, (95, 97))
+    
+    # Define Legendre Polynomials And Normalize
+    valid_mask = m <= n
+    delta_0_m = (m == 0).astype(np.float64)
     numer = (2 - delta_0_m) * ((2 * n) + 1) * factorial(n - m)
     denom = factorial(n + m)
     norm = np.zeros_like(n, dtype=np.float64)
     norm[valid_mask] = np.sqrt(numer[valid_mask] / denom[valid_mask])
 
     if not J2:
-        norm[0, 0] = 0.0 # Replace The J2 Norm Value With Zero If Not Wanted
+        norm[0, 0] = 0.0 # Remove J2 if not wanted
+
+    # Pre-compute Legendre Matrix: Shape (lat_precis, 95, 97) And Apply Normalization
+    weighted_lpmv = np.zeros((lat_precis, 95, 97))
+    for j, colat in enumerate(tqdm.tqdm(colat_array, desc="Pre-Computing Normalized Legendre Polynomials Per Coordinate")):
+        l_vals = lpmv(m, n, np.cos(colat))
+        weighted_lpmv[j] = np.nan_to_num(l_vals, nan=0.0) * norm
+    print()
+
+    # Pre-Compute Trigonometric Relations (Shape = (lon_precis, 97))
+    m_range = np.arange(97)
+    cos_m_phi = np.cos(m_range[np.newaxis, :] * colon_array[:, np.newaxis])
+    sin_m_phi = np.sin(m_range[np.newaxis, :] * colon_array[:, np.newaxis])
+
+    # Format Data
+    trimmed_data = data_array[2:, :, :-2] # Remove Degree 0 And 1 Rows And Standard Deviations
+    C = trimmed_data[:, :, 0]
+    S = trimmed_data[:, :, 1]
     
-    # Initialise Progress Bar
-    pbar = tqdm.tqdm(total=(lat_precis * lon_precis), desc="Processing Coordinates")
+    # Initialise Data Lists
+    earth_grid_pot = np.zeros((lat_precis, lon_precis))
+    earth_grid_acc = np.zeros((lat_precis, lon_precis))
 
-    # Compute potential for each latitude/longitude pair
-    for j, colat in enumerate(colat_array): # Loop over latitudes
-        # Define lmpv Values
-        lpmv_values = lpmv(m, n, np.cos(colat))
-        lpmv_values = np.nan_to_num(lpmv_values, nan=0.0)
+    # Run Sum Before To Save Memory
+    n_plus_1 = n + 1
 
-        for i, lon in enumerate(colon_array): # Loop over longitudes
-            # Define Constants (n=0 And n=1 Terms)
-            grav_pot = (mu/r)
-            grav_acc = (mu/(r**2))
+    # Run Over All Coordinates
+    for j in tqdm.tqdm(range(lat_precis), desc="Processing Coordinates"):
+        L_j = weighted_lpmv[j]
+        
+        # Weighted coefficients summed over degree n
+        C_sum = np.sum(C * L_j, axis=0)      # Vector length 97
+        S_sum = np.sum(S * L_j, axis=0)      # Vector length 97
+        C_sum_a = np.sum(C * L_j * n_plus_1, axis=0)
+        S_sum_a = np.sum(S * L_j * n_plus_1, axis=0)
 
-            # Define Values
-            pot_terms = (mu/Re) * ((C_array * np.cos(m * lon)) + (S_array * np.sin(m * lon))) * (norm * lpmv_values)
-            acc_terms = (1/r) * (n + 1) * pot_terms
+        # Dot product for all longitudes at once
+        pot_row = (cos_m_phi @ C_sum) + (sin_m_phi @ S_sum)
+        acc_row = (cos_m_phi @ C_sum_a) + (sin_m_phi @ S_sum_a)
 
-            grav_pot += np.sum(pot_terms)
-            grav_acc += np.sum(acc_terms)
-
-            # Append Values To Coordinate Grid
-            earth_grid_pot[j,i] = grav_pot
-            earth_grid_acc[j,i] = grav_acc
-
-            # Update Progress Bar
-            pbar.update(1)
+        earth_grid_pot[j, :] += (mu / Re) * pot_row + (mu / r)
+        earth_grid_acc[j, :] += (mu / (Re * r)) * acc_row + (mu / (r**2))
     
-    # Close Progress Bar
-    pbar.close()
-
-    # Translate Acceleration Data From km/s2 To mGal
-    earth_grid_acc =  1e8 * earth_grid_acc
-
-    if excel_output:
+    # Convert Acceleration Data From km/s2 To m/s2
+    earth_grid_acc *= 1e3
+    
+    if save_xlsx:
         # Format Potential And Acceleration Data
         lat_array = np.linspace(lat_range[1], lat_range[0], lat_precis)
         lat_array_degree = np.degrees(lat_array)
         lat_array_degree = lat_array_degree.reshape(-1, 1)
         pot_first_column = np.vstack([["km2/s2"], lat_array_degree])
-        acc_first_column = np.vstack([["mGal"], lat_array_degree])
+        acc_first_column = np.vstack([["m/s\u00B2"], lat_array_degree])
 
         pot_grid_data = np.vstack((np.degrees(colon_array), earth_grid_pot))
         pot_grid_data = np.hstack((pot_first_column, pot_grid_data))
@@ -155,8 +155,8 @@ def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range
         acc_grid_data = np.hstack((acc_first_column, acc_grid_data))
 
         # Define DataFrames For Excel Output
-        df1 = pd.DataFrame(C_array)
-        df2 = pd.DataFrame(S_array)
+        df1 = pd.DataFrame(C)
+        df2 = pd.DataFrame(S)
         df3 = pd.DataFrame(norm)
         df4 = pd.DataFrame(pot_grid_data)
         df5 = pd.DataFrame(acc_grid_data)
@@ -192,149 +192,143 @@ def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range
         wb.save(file_path)
 
         # Print Completion Statement
-        print(f"\n✅ Data Written To {file_name}\n")
+        print(f"\n✅ Data Written To {file_name}")
 
     return earth_grid_acc
 
-def spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), J2=False):
-    # Define Data List
-    data_lst_acc = []
-    data_lst_pot = []
+def spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), J2=False, save_xlsx=False):
+    '''
+    Args:
+        data_lib: list of dictionaries containing 'date' and 'data_array' keys for all dates
+        sorted_date_lst: list of dates in the same order as data_lib to ensure correct matching
+        lat_precis: amount of latitudinal coordinate points
+        lon_precis: amount of longitudinal coordinate points
+        lat_range: tuple of minimum and maximum lattitude in radians
+        lon_range: tuple of minimum and maximum longitude in radians
+        J2: include (True) or exclude (False)
+        save_xlsx: create excel sheet (True) or not (False)
+
+    Returns:
+        average_acc: 2D array of average gravitational radial acceleration [m/s^2] across all dates along a coordinate grid with x as longitude and y as latitude
+    
+    Notes:
+        always close the excel file before running
+    '''
+
+    # Define Coordinate Grid
+    colat_range = ((np.pi / 2) - lat_range[1], (np.pi / 2) - lat_range[0])
+    colat_array = np.linspace(colat_range[0], colat_range[1], lat_precis)
+    
+    colon_range = (lon_range[0] + np.pi, lon_range[1] + np.pi)
+    colon_array = np.linspace(colon_range[0], colon_range[1], lon_precis)
+
+    # Define Constants
+    mu = 3.9860044150e+5 
+    Re = 6378.13630000 
+    r = Re
+    
+    # Degrees n (2 to 96) And Orders m (0 to 96)
+    n_vals = np.arange(2, 97)[:, np.newaxis] # (95, 1)
+    m_vals = np.arange(0, 97)[np.newaxis, :] # (1, 97)
+    
+    # Broadcast To (95, 97) Shape Automatically
+    n = np.broadcast_to(n_vals, (95, 97))
+    m = np.broadcast_to(m_vals, (95, 97))
+    
+    # Define Legendre Polynomials And Normalize
+    valid_mask = m <= n
+    delta_0_m = (m == 0).astype(np.float64)
+    numer = (2 - delta_0_m) * ((2 * n) + 1) * factorial(n - m)
+    denom = factorial(n + m)
+    norm = np.zeros_like(n, dtype=np.float64)
+    norm[valid_mask] = np.sqrt(numer[valid_mask] / denom[valid_mask])
+
+    if not J2:
+        norm[0, 0] = 0.0 # Remove J2 if not wanted
+
+    # Pre-compute Legendre Matrix: Shape (lat_precis, 95, 97) And Apply Normalization
+    weighted_lpmv = np.zeros((lat_precis, 95, 97))
+    for j, colat in enumerate(tqdm.tqdm(colat_array, desc="Pre-Computing Normalized Legendre Polynomials Per Coordinate")):
+        l_vals = lpmv(m, n, np.cos(colat))
+        weighted_lpmv[j] = np.nan_to_num(l_vals, nan=0.0) * norm
+    print()
+
+    # Pre-Compute Trigonometric Relations (Shape = (lon_precis, 97))
+    m_range = np.arange(97)
+    cos_m_phi = np.cos(m_range[np.newaxis, :] * colon_array[:, np.newaxis])
+    sin_m_phi = np.sin(m_range[np.newaxis, :] * colon_array[:, np.newaxis])
 
     # Extract Data
     data_dict = {entry['date']: entry['data_array'] for entry in data_lib}
+    
+    # Initialise Data Lists
+    total_pot = np.zeros((lat_precis, lon_precis))
+    total_acc = np.zeros((lat_precis, lon_precis))
 
-    # Initialise Progress Bar
-    pbar = tqdm.tqdm(total=(len(sorted_date_lst) * lat_precis * lon_precis), desc="Processing Dates")
+    # Run Sum Before To Save Memory
+    n_plus_1 = n + 1
 
     # Loop Over All Defined Dates
-    for i, date in enumerate(sorted_date_lst):
-        # Define Constants
-        mu = 3.9860044150e+5  # In km^3/s^2
-        Re = 6378.13630000  # In km
-        r = Re  # Gravity measured at Earth's surface
+    for date in tqdm.tqdm(sorted_date_lst, desc="Processing Dates"):
 
-        # Define Coordinate Grid In Radians
-        colat_range = (((np.pi / 2) - lat_range[1]), ((np.pi / 2) - lat_range[0]))  # Convert latitude into colatitude and switch the order around such that the first value is closest to the North Pole
-        colat_array = np.linspace(colat_range[0], colat_range[1], lat_precis)
-        colon_range = ((lon_range[0] + np.pi), (lon_range[1] + np.pi))  # Convert longitude into colongitude
-        colon_array = np.linspace(colon_range[0], colon_range[1], lon_precis)
-        earth_grid_pot = np.zeros((len(colat_array), len(colon_array)))
-        earth_grid_acc = np.zeros((len(colat_array), len(colon_array)))
-
-        # Retrieve Data Array
+        # Extract Data From Current Date
         data_array = data_dict[date]
+        trimmed_data = data_array[2:, :, :-2]
+        C, S = trimmed_data[:, :, 0], trimmed_data[:, :, 1]
 
-        # Format Data
-        trimmed_data = data_array[2:, :, :-2] # Remove Degree 0 And 1 Rows And Standard Deviations
-        C_array = trimmed_data[:, :, 0]
-        S_array = trimmed_data[:, :, 1]
-        
-        # Set Up Coefficient Array
-        row_values = np.arange(2, 97)[:, np.newaxis]  # Shape (95, 1), degree n from 2 to 96
-        col_values = np.arange(0, 97)[np.newaxis, :]  # Shape (1, 97), order m from 0 to 96
+        # Run Over All Coordinates
+        for j in range(lat_precis):
+            L_j = weighted_lpmv[j]
+            
+            # Weighted coefficients summed over degree n
+            C_sum = np.sum(C * L_j, axis=0)      # Vector length 97
+            S_sum = np.sum(S * L_j, axis=0)      # Vector length 97
+            C_sum_a = np.sum(C * L_j * n_plus_1, axis=0)
+            S_sum_a = np.sum(S * L_j * n_plus_1, axis=0)
 
-        rows = np.tile(row_values, (1, 97))  # Shape (95, 97)
-        cols = np.tile(col_values, (95, 1))  # Shape (95, 97)
+            # Dot product for all longitudes at once
+            pot_row = (cos_m_phi @ C_sum) + (sin_m_phi @ S_sum)
+            acc_row = (cos_m_phi @ C_sum_a) + (sin_m_phi @ S_sum_a)
 
-        coefficient_array = np.stack((rows, cols), axis=-1)  # Shape (95, 97, 2), First = Degree (n), Second = Order (m)
+            total_pot[j, :] += (mu / Re) * pot_row + (mu / r)
+            total_acc[j, :] += (mu / (Re * r)) * acc_row + (mu / (r**2))
 
-        n = coefficient_array[:, :, 0]
-        m = coefficient_array[:, :, 1]
-        
-        # Define Normalization For Associated Legendre Polynomials
-        valid_mask = m <= n # Mask invalid entries where m > n (those are not valid for Legendre)
-        delta_0_m = (m == 0).astype(np.float64)  # 1 if m == 0 else 0
-        numer = (2 - delta_0_m) * ((2 * n) + 1) * factorial(n - m)
-        denom = factorial(n + m)
-        norm = np.zeros_like(n, dtype=np.float64)
-        norm[valid_mask] = np.sqrt(numer[valid_mask] / denom[valid_mask])
+    # Define Averages
+    num_dates = len(sorted_date_lst)
+    average_pot = total_pot / num_dates
+    average_acc = (total_acc / num_dates) * 1e3 # Convert to m/s^2
 
-        if not J2:
-            norm[0, 0] = 0.0 # Replace The J2 Norm Value With Zero If Not Wanted
+    # Save Data To Excel File
+    if save_xlsx:
+        # Formatting for Excel
+        lat_array_deg = np.degrees(np.linspace(lat_range[1], lat_range[0], lat_precis)).reshape(-1, 1)
+        lon_array_deg = np.degrees(colon_array)
 
-        # Compute potential for each latitude/longitude pair
-        for j, colat in enumerate(colat_array): # Loop over latitudes
-            # Define lmpv Values
-            lpmv_values = lpmv(m, n, np.cos(colat))
-            lpmv_values = np.nan_to_num(lpmv_values, nan=0.0)
+        def format_grid(data, unit):
+            first_col = np.vstack([[unit], lat_array_deg.astype(str)])
+            grid_body = np.vstack((lon_array_deg, data))
+            return pd.DataFrame(np.hstack((first_col, grid_body)))
 
-            for i, lon in enumerate(colon_array): # Loop over longitudes
-                # Define Constants (n=0 And n=1 Terms)
-                grav_pot = (mu/r)
-                grav_acc = (mu/(r**2))
+        df_pot = format_grid(average_pot, "km\u00B2/s\u00B2")
+        df_acc = format_grid(average_acc, "m/s\u00B2")
 
-                # Define Values
-                pot_terms = (mu/Re) * ((C_array * np.cos(m * lon)) + (S_array * np.sin(m * lon))) * (norm * lpmv_values)
-                acc_terms = (1/r) * (n + 1) * pot_terms
+        file_path = os.path.join("Gravity_Maps/Output", "Baseline Gravity Field.xlsx")
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
-                grav_pot += np.sum(pot_terms)
-                grav_acc += np.sum(acc_terms)
+        with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
+            df_pot.to_excel(writer, sheet_name='Potential', index=False, header=False)
+            df_acc.to_excel(writer, sheet_name='Acceleration', index=False, header=False)
 
-                # Append Values To Coordinate Grid
-                earth_grid_pot[j,i] = grav_pot
-                earth_grid_acc[j,i] = grav_acc
+        # Style formatting (OpenPyXL)
+        wb = openpyxl.load_workbook(file_path)
+        for name in ["Potential", "Acceleration"]:
+            ws = wb[name]
+            for cell in ws[1]: cell.font = openpyxl.styles.Font(bold=True)
+            for row in ws.iter_rows(min_row=2, min_col=1, max_col=1):
+                for cell in row: cell.font = openpyxl.styles.Font(bold=True)
+        wb.save(file_path)
 
-                # Update Progress Bar
-                pbar.update(1)
-
-        # Append Values To Corresponding Lists
-        data_lst_pot.append(earth_grid_pot)
-        data_lst_acc.append(1e8 * earth_grid_acc)
-    
-    # Close Progress Bar
-    pbar.close()
-
-    # Define The Averages
-    average_pot = np.mean(data_lst_pot, axis=0)
-    average_acc = np.mean(data_lst_acc, axis=0)
-
-    # Format Potential And Acceleration Data
-    lat_array = np.linspace(lat_range[1], lat_range[0], lat_precis)
-    lat_array_degree = np.degrees(lat_array)
-    lat_array_degree = lat_array_degree.reshape(-1, 1)
-    pot_first_column = np.vstack([["km2/s2"], lat_array_degree])
-    acc_first_column = np.vstack([["mGal"], lat_array_degree])
-
-    pot_grid_data = np.vstack((np.degrees(colon_array), average_pot))
-    pot_grid_data = np.hstack((pot_first_column, pot_grid_data))
-
-    acc_grid_data = np.vstack((np.degrees(colon_array), average_acc))
-    acc_grid_data = np.hstack((acc_first_column, acc_grid_data))
-
-    # Convert NumPy arrays to DataFrames
-    df_pot = pd.DataFrame(pot_grid_data)
-    df_acc = pd.DataFrame(acc_grid_data)
-
-    # Create File Path
-    file_path = os.path.join("Gravity_Maps/Output", "Baseline Gravity Field.xlsx")
-
-    # Write to Excel file with separate sheets
-    with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
-        df_pot.to_excel(writer, sheet_name='Potential', index=False, header=False)
-        df_acc.to_excel(writer, sheet_name='Acceleration', index=False, header=False)
-
-    # Load the workbook to modify styles
-    wb = openpyxl.load_workbook(file_path)
-
-    # Apply formatting to the last two sheets
-    for sheet_name in ["Potential", "Acceleration"]:
-        ws = wb[sheet_name]
-
-        # Bold the first row (headers)
-        for cell in ws[1]:  # First row
-            cell.font = openpyxl.styles.Font(bold=True)
-
-        # Bold the first column (excluding header row)
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
-            for cell in row:
-                cell.font = openpyxl.styles.Font(bold=True)
-
-    # Save the modified file
-    wb.save(file_path)
-
-    # Print Completion Statement
-    print(f"\n✅ Data Written To Baseline Gravity Field.xlsx\n")
+        print(f"\n✅ Done. Results saved to {file_path}")
 
     return average_acc
 
@@ -363,7 +357,7 @@ def render_single(earth_grid_acc, date, lat_range=(-np.pi/2, np.pi/2), lon_range
     cropped_map = map_img[lat_min_idx:lat_max_idx, lon_min_idx:lon_max_idx]
 
     # Create the heatmap
-    plt.figure(figsize=(10, 5))
+    plt.figure(figsize=(16, 8))
 
     # Plot the cropped map image with the adjusted extent
     plt.imshow(cropped_map, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], aspect='auto')
@@ -375,12 +369,12 @@ def render_single(earth_grid_acc, date, lat_range=(-np.pi/2, np.pi/2), lon_range
     plt.xlabel("Longitude [deg]")
     plt.ylabel("Latitude [deg]")
     plt.title("Gravity {}".format(date))
-    plt.colorbar(label="Gravity Acceleration [mGal]")
+    plt.colorbar(label="Gravitational Acceleration [m/s\u00B2]")
 
     # Show And Save The Plot
     filename = f"Gravity_Maps/Output/Gravity_Plot_{date}.png"
-    plt.savefig(filename)
-    print(f"✅ Heatmap Saved To {filename}")
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"\n✅ Heatmap Saved To {filename}")
     plt.show()
 
     return
@@ -414,7 +408,7 @@ def render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=
     vmax = max(earth_grid_acc_1.max(), earth_grid_acc_2.max())
 
     # Create a figure with two subplots side by side
-    fig, axes = plt.subplots(1, 2, figsize=(15, 7), sharex=True, sharey=True)  # Share x and y axes
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8), sharex=True, sharey=True)  # Share x and y axes
 
     # Ensure the subplots stay rectangular by setting the aspect ratio
     for ax in axes:
@@ -438,14 +432,14 @@ def render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=
 
     # Add a shared horizontal colorbar centered below both subplots
     cbar = fig.colorbar(heatmap1, ax=axes, orientation='horizontal', fraction=0.05, pad=0.1)
-    cbar.set_label("Gravity Anomaly [mGal]")
+    cbar.set_label("Gravitational Acceleration [m/s\u00B2]")
 
     # Adjust subplot spacing to maintain rectangular shapes
     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.238, wspace=0.1)
 
     # Show And Save The Plot
     filename = f"Gravity_Maps/Output/Gravity_Plot_{selected_dates[0]}_&_{selected_dates[1]}.png"
-    plt.savefig(filename)
-    print(f"✅ Heatmap Saved To {filename}")
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"\n✅ Heatmap Saved To {filename}")
     plt.show()
 
