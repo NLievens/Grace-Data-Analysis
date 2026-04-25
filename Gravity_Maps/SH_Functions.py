@@ -41,7 +41,9 @@ import tqdm
 import openpyxl
 import numpy as np
 import pandas as pd
+import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
+import cartopy.feature as cfeature
 from scipy.special import lpmv, factorial
 
 # Define Spherical Harmonics Functions
@@ -333,113 +335,119 @@ def spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=30, lon_p
     return average_acc
 
 def render_single(earth_grid_acc, date, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi)):
-    # Define Analysis Region In Degrees
-    lon_range_deg = np.degrees(lon_range)
-    lat_range_deg = np.degrees(lat_range)
-
-    # Load Map Image & Take Its Dimensions
-    map_img = plt.imread("Gravity_Maps/Mercator_Map.jpg")  # Mercator_Map
-    img_height, img_width, _ = map_img.shape
-
-    # Define Global Latitude & Longitude Range Of The Image
-    global_lon_range = (-180, 180)
-    global_lat_range = (-90, 90)
-
-    # Calculate Cropping Indices For Longitude
-    lon_min_idx = int((lon_range_deg[0] - global_lon_range[0]) / (global_lon_range[1] - global_lon_range[0]) * img_width)
-    lon_max_idx = int((lon_range_deg[1] - global_lon_range[0]) / (global_lon_range[1] - global_lon_range[0]) * img_width)
-
-    # Calculate Cropping Indices For Latitude (flip due to image orientation)
-    lat_min_idx = int((global_lat_range[1] - lat_range_deg[1]) / (global_lat_range[1] - global_lat_range[0]) * img_height)
-    lat_max_idx = int((global_lat_range[1] - lat_range_deg[0]) / (global_lat_range[1] - global_lat_range[0]) * img_height)
-
-    # Crop the map image to match the lat/lon range (latitude indices flipped)
-    cropped_map = map_img[lat_min_idx:lat_max_idx, lon_min_idx:lon_max_idx]
-
-    # Create the heatmap
-    plt.figure(figsize=(16, 8))
-
-    # Plot the cropped map image with the adjusted extent
-    plt.imshow(cropped_map, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], aspect='auto')
-
-    # Overlay the heatmap with transparency
-    plt.imshow(earth_grid_acc, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], origin="upper", alpha=0.6, cmap="coolwarm", aspect="auto")  # Replace With "seismic" For More Contrast
+    """
+    Renders a gravity acceleration heatmap using Cartopy.
     
-    # Add labels and title
-    plt.xlabel("Longitude [deg]")
-    plt.ylabel("Latitude [deg]")
-    plt.title("Gravity {}".format(date))
-    plt.colorbar(label="Gravitational Acceleration [m/s\u00B2]")
+    Args:
+        earth_grid_acc (np.ndarray): 2D array of values.
+        date (str): Date string for the title/filename.
+        lat_range/lon_range (tuple): Radians, defining the extent of earth_grid_acc.
+    """
+    # Convert Input Ranges From Radians To Degrees
+    lon_deg = np.degrees(lon_range)
+    lat_deg = np.degrees(lat_range)
 
-    # Show And Save The Plot
+    # Setup Plot And Projection
+    projection = ccrs.PlateCarree()
+    fig, ax = plt.subplots(figsize=(16, 8), subplot_kw={'projection': projection})
+
+    # Set The Map Extent, i.e. Crop
+    ax.set_extent([lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]], crs=ccrs.PlateCarree())
+
+    # Add Background Features 
+    ax.add_feature(cfeature.LAND, facecolor='lightgray')
+    ax.add_feature(cfeature.OCEAN, facecolor='aliceblue')
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
+    ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
+
+    # Overlay The Data (Extent: [min_lon, max_lon, min_lat, max_lat])
+    im = ax.imshow(
+        earth_grid_acc, 
+        extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
+        transform=ccrs.PlateCarree(),
+        origin='upper', 
+        cmap='coolwarm', 
+        alpha=0.7,
+        zorder=3 # Ensures data stays above the land/ocean colors
+    )
+
+    # Aesthetics
+    plt.title(f"Gravity: {date}", fontsize=15, pad=20)
+    gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.3)
+    gl.top_labels = False
+    gl.right_labels = False
+
+    # Add Colorbar
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', pad=0.02, aspect=30)
+    cbar.set_label("Gravitational Acceleration [m/s\u00B2]", fontsize=12)
+
+    # Save and Show
     filename = f"Gravity_Maps/Output/Gravity_Plot_{date}.png"
     plt.savefig(filename, dpi=300, bbox_inches='tight')
-    print(f"\n✅ Heatmap Saved To {filename}")
+    print(f"\n✅ Map successfully rendered and saved to {filename}")
     plt.show()
 
     return
 
 def render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi)):
-    # Define Analysis Region In Degrees
-    lon_range_deg = np.degrees(lon_range)
-    lat_range_deg = np.degrees(lat_range)
+    # Convert Radians to Degrees for mapping
+    lon_deg = np.degrees(lon_range)
+    lat_deg = np.degrees(lat_range)
 
-    # Load Map Image & Take Its Dimensions
-    map_img = plt.imread("Gravity_Maps/Mercator_Map.jpg")  # Mercator_Map
-    img_height, img_width, _ = map_img.shape
-
-    # Define Global Latitude & Longitude Range Of The Image
-    global_lon_range = (-180, 180)
-    global_lat_range = (-90, 90)
-
-    # Calculate Cropping Indices For Longitude
-    lon_min_idx = int((lon_range_deg[0] - global_lon_range[0]) / (global_lon_range[1] - global_lon_range[0]) * img_width)
-    lon_max_idx = int((lon_range_deg[1] - global_lon_range[0]) / (global_lon_range[1] - global_lon_range[0]) * img_width)
-
-    # Calculate Cropping Indices For Latitude (flip due to image orientation)
-    lat_min_idx = int((global_lat_range[1] - lat_range_deg[1]) / (global_lat_range[1] - global_lat_range[0]) * img_height)
-    lat_max_idx = int((global_lat_range[1] - lat_range_deg[0]) / (global_lat_range[1] - global_lat_range[0]) * img_height)
-
-    # Crop the map image to match the lat/lon range (latitude indices flipped)
-    cropped_map = map_img[lat_min_idx:lat_max_idx, lon_min_idx:lon_max_idx]
-
-    # Find global min and max across both datasets To Have Same Scaling
+    # Synchronize the Color Scale (vmin/vmax)
     vmin = min(earth_grid_acc_1.min(), earth_grid_acc_2.min())
     vmax = max(earth_grid_acc_1.max(), earth_grid_acc_2.max())
 
-    # Create a figure with two subplots side by side
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8), sharex=True, sharey=True)  # Share x and y axes
+    # Setup Figure with PlateCarree projection
+    projection = ccrs.PlateCarree()
+    fig, axes = plt.subplots(1, 2, figsize=(16, 4), 
+                             subplot_kw={'projection': projection})
 
-    # Ensure the subplots stay rectangular by setting the aspect ratio
-    for ax in axes:
-        ax.set_box_aspect(0.7)  # 1 means a square; adjust for wider rectangles
+    data_grids = [earth_grid_acc_1, earth_grid_acc_2]
 
-    # First plot (left)
-    axes[0].imshow(cropped_map, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], aspect='auto')
-    heatmap1 = axes[0].imshow(earth_grid_acc_1, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], origin="upper", alpha=0.6, cmap="coolwarm", aspect="auto", vmin=vmin, vmax=vmax)
+    for i, ax in enumerate(axes):
+        # Set The Extent (Crop)
+        # This automatically handles the lat/lon window
+        ax.set_extent([lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]], crs=ccrs.PlateCarree())
+        
+        # Add Geographic Layers
+        ax.add_feature(cfeature.LAND, facecolor='lightgray', zorder=0)
+        ax.add_feature(cfeature.OCEAN, facecolor='aliceblue', zorder=0)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8, zorder=2)
+        ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.4, zorder=2)
+        
+        # Plot the Data
+        im = ax.imshow(
+            data_grids[i],
+            extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
+            transform=ccrs.PlateCarree(),
+            origin='upper',
+            alpha=0.7,
+            cmap='coolwarm',
+            vmin=vmin,
+            vmax=vmax,
+            zorder=1
+        )
+        
+        # Title and Gridlines
+        ax.set_title(f"Gravity {selected_dates[i]}", fontsize=14, pad=10)
+        
+        gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.2)
+        gl.top_labels = False
+        gl.right_labels = False
+        
+        # Only show latitude labels on the left-most plot to clean up the center
+        if i == 1:
+            gl.left_labels = False
 
-    axes[0].set_title("Gravity {}".format(selected_dates[0]))
-    axes[0].set_xlabel("Longitude [deg]")
-    axes[0].set_ylabel("Latitude [deg]")
+    # Shared Colorbar centered at the bottom
+    cbar = fig.colorbar(im, ax=axes, orientation='horizontal', fraction=0.05, pad=0.08)
+    cbar.set_label("Gravitational Acceleration [m/s\u00B2]", fontsize=12)
 
-    # Second plot (right)
-    axes[1].imshow(cropped_map, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], aspect='auto')
-    heatmap2 = axes[1].imshow(earth_grid_acc_2, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], origin="upper", alpha=0.6, cmap="coolwarm", aspect="auto", vmin=vmin, vmax=vmax)
-
-    axes[1].set_title("Gravity {}".format(selected_dates[1]))
-    axes[1].set_xlabel("Longitude [deg]")
-    axes[1].set_ylabel("Latitude [deg]")
-
-    # Add a shared horizontal colorbar centered below both subplots
-    cbar = fig.colorbar(heatmap1, ax=axes, orientation='horizontal', fraction=0.05, pad=0.1)
-    cbar.set_label("Gravitational Acceleration [m/s\u00B2]")
-
-    # Adjust subplot spacing to maintain rectangular shapes
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.238, wspace=0.1)
-
-    # Show And Save The Plot
+    # Save and Show
     filename = f"Gravity_Maps/Output/Gravity_Plot_{selected_dates[0]}_&_{selected_dates[1]}.png"
     plt.savefig(filename, dpi=300, bbox_inches='tight')
-    print(f"\n✅ Heatmap Saved To {filename}")
+    print(f"\n✅ Dual Heatmap Saved To {filename}")
     plt.show()
 
+    return
