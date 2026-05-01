@@ -6,12 +6,13 @@ DOCSTRING
 import os
 import sys
 import numpy as np
-from datetime import date
+from datetime import date as dt_date
 
 # Internal Imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.Data_Reader import *
 from LSQR_Functions import *
+from LSQR import *
 
 # Functions
 def clear_lines(n):
@@ -81,6 +82,10 @@ def is_date_in_range(date_ddmmyyyy, min_start_ddmmyyyy, max_end_ddmmyyyy):
     # Check if date is within range
     return min_start <= date <= max_end
 
+# Extract GRACE Data
+folder_path = Path("Data/Parsed_Data")
+data_year_arr, date_year_arr, data_lib, sorted_date_lst = read_grace_data(folder_path)
+
 # User Selects Analysis Choice
 print("""
 === GRACE Data Selection Menu ===
@@ -143,7 +148,7 @@ if mod_choice == '1':
     else:
         clear_lines(1)
         print("Full Dataset Chosen")
-        # Use entire dataset
+        # Use Entire Dataset
         dataset_start_year = int(min_start[4:])
         dataset_end_year = int(max_end[4:])
         year_lst = list(range(dataset_start_year, dataset_end_year + 1))
@@ -211,14 +216,24 @@ if mod_choice == '1':
         # Convert to radians
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
+    
+    # Save Data To Excel
+    custom_length += 2
+    xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
+
+    if xlsx_choice == 'y':
+        save_xlsx = True
+    
+    else:
+        save_xlsx = False
 
     # Define Sample_Time
     day = int(user_date[:2])
     month = int(user_date[2:4])
     year = int(user_date[4:])
-
-    chosen_date = date(year, month, day)
-    start_date = date(year_lst[0], 1, 1)
+    
+    chosen_date = dt_date(year, month, day)
+    start_date = dt_date(year_lst[0], 1, 1)
     sample_time = (chosen_date - start_date).days
 
     # Print Settings Overview
@@ -227,12 +242,29 @@ if mod_choice == '1':
         print(f"⚠️  Warning: Chosen Date Is Not In Dataset\n")
 
     print(f"Analysis Dataset    ➜  {year_lst}")
-    print(f"Chosen Sample Time  ➜  {sample_time} Days")
+    print(f"Chosen Sample Time  ➜  Day {sample_time}")
     print(f"Latitude Precision  ➜  {lat_precis} Points")
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
 
+    delta_t_lst_old, data_CS_vector_lst_old, data_CS_vector_lst_fil_old, data_CS_std_vector_lst_old = compute_delta_harmonics_old(data_year_arr, date_year_arr, year_lst, max_order=96)
+    delta_t_lst_new, data_CS_vector_lst_new, data_CS_vector_lst_fil_new, data_CS_std_vector_lst_new = compute_delta_harmonics_new(data_year_arr, date_year_arr, year_lst, max_order=96)
+
+    def compare_results(list_old, list_new):
+        # Check if lengths match first
+        if len(list_old) != len(list_new):
+            return False
+        
+        # Check each array pair
+        return all(np.array_equal(a, b) for a, b in zip(list_old, list_new))
+
+    # Usage:
+    print(f"Data Match: {compare_results(data_CS_vector_lst_old, data_CS_vector_lst_new)}")
+    print(f"Fil Data Match: {compare_results(data_CS_vector_lst_fil_old, data_CS_vector_lst_fil_new)}")
+    print(f"Delta T Match: {delta_t_lst_old == delta_t_lst_new}") # Simple list of ints
+
+    '''
     # Define LSQR Coefficients
     model_coef, model_coef_fil, SH_arr, SH_arr_fil, cov_SH_arr, cov_fil_SH_arr = LSQR_coefficients(data_year_arr, date_year_arr, year_lst)
 
@@ -254,6 +286,7 @@ if mod_choice == '1':
 
     # Render Heatmap
     render_single(earth_grid_EWH, user_date, sample_time, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi))
+    '''
 
 elif mod_choice == '2':
     # Print Confirmation Statement

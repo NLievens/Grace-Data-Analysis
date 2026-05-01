@@ -62,6 +62,10 @@ def clear_lines(n):
         sys.stdout.write("\033[F")  # Move cursor up one line
         sys.stdout.write("\033[K")  # Clear to end of line
 
+# Extract GRACE Data
+folder_path = Path("Data/Parsed_Data")
+data_year_arr, date_year_arr, data_lib, sorted_date_lst = read_grace_data(folder_path)
+
 # User Selects Analysis Choice
 print("""
 === GRACE Data Selection Menu ===

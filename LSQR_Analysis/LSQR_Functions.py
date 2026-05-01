@@ -9,8 +9,11 @@ import openpyxl
 import numpy as np
 import pandas as pd
 import statsmodels.api as sm
-from datetime import datetime
+from datetime import datetime, date as dt_date
+from scipy.linalg import pinv
+import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
+import cartopy.feature as cfeature
 from scipy.interpolate import interp1d
 from scipy.special import lpmv, factorial
 from matplotlib.colors import TwoSlopeNorm
@@ -78,6 +81,7 @@ def get_love_numbers(max_degree):
     return l_full, k_l_full
 
 # Define Least Squares Regression
+'''
 def LSQR_coefficients(data_year_arr, date_year_arr, year_lst, max_order=96):
     """
     Fits linear regression models to spherical harmonic coefficients over a specified year range.
@@ -341,6 +345,149 @@ def LSQR_coefficients(data_year_arr, date_year_arr, year_lst, max_order=96):
     print(f"cov_SH_arr  ➜  {cov_SH_arr.shape}")
 
     return model_coef, model_coef_fil, SH_arr, SH_arr_fil, cov_SH_arr, cov_fil_SH_arr
+'''
+
+def LSQR_coefficients(data_year_arr, date_year_arr, year_lst, max_order=96):
+    """
+    Fits WLS regression to GRACE anomalies relative to the long-term mean.
+    """
+    # 1. Time and Design Matrix Setup
+    year_index_arr = np.array(year_lst) - 2002
+    considered_date_arr = date_year_arr[year_index_arr].flatten()
+    considered_data_arr = data_year_arr[year_index_arr]
+
+    # Reference time t0 (Jan 1 of the first year)
+    t0_time = datetime(min(year_lst), 1, 1)
+    delta_t_lst = []
+    valid_indices = []
+    
+    for i, date_str in enumerate(considered_date_arr):
+        if date_str.strip().lower() not in ("", "empty", "none"):
+            curr = datetime.strptime(date_str.split("_")[0], "%d%m%Y")
+            delta_t_lst.append((curr - t0_time).days)
+            valid_indices.append(i)
+
+    delta_t_arr = np.array(delta_t_lst)
+    num_months = len(delta_t_arr)
+    
+    # Pre-build Design Matrix T (N_months x N_parameters)
+    T = np.array([T_row(ti, year_lst) for ti in delta_t_arr])
+    num_params = T.shape[1]
+
+    # 2. Extract, Filter, and Stack Data
+    all_Y = []
+    all_Y_fil = []
+    all_Sig = []
+
+    for idx in tqdm.tqdm(valid_indices, desc="Filtering & Stacking"):
+        y_idx, m_idx = divmod(idx, 12)
+        month_data = considered_data_arr[y_idx, m_idx]
+        
+        C_orig, S_orig = month_data[:, :, 0], month_data[:, :, 1]
+        C_std, S_std = month_data[:, :, 2], month_data[:, :, 3]
+
+        # Apply sequential filters
+        C_semi, S_semi = correlated_error_filter(C_orig, S_orig, max_order)
+        C_fil, S_fil = gaussian_filter(C_semi, S_semi)
+
+        # Flatten into vectors (9409 is the count for degree 96)
+        y_raw = np.concatenate([C_orig[:max_order+1].flatten(), S_orig[:max_order+1].flatten()])
+        y_fil = np.concatenate([C_fil[:max_order+1].flatten(), S_fil[:max_order+1].flatten()])
+        sig = np.concatenate([C_std[:max_order+1].flatten(), S_std[:max_order+1].flatten()])
+        
+        all_Y.append(y_raw)
+        all_Y_fil.append(y_fil)
+        all_Sig.append(sig)
+
+    Y_stack = np.array(all_Y)       # Shape: (N_months, N_coeffs)
+    Y_fil_stack = np.array(all_Y_fil)
+    Sig_stack = np.array(all_Sig)
+
+    # 3. Calculate Long-Term Mean and Anomaly
+    # Mean across the time axis (axis=0)
+    Y_mean_fil = np.mean(Y_fil_stack, axis=0)
+    
+    # Uncertainty of the mean (Propagated standard error)
+    # sigma_mean = (1/N) * sqrt(sum(sigma_i^2))
+    Sig_mean = np.sqrt(np.sum(Sig_stack**2, axis=0)) / num_months
+    
+    # Create Anomalies
+    Y_fil_anomaly = Y_fil_stack - Y_mean_fil
+    Sig_anomaly = np.sqrt(Sig_stack**2 + Sig_mean**2)
+
+    # 4. Prepare Masking
+    nonzero_mask = Y_stack[0] != 0
+    active_Y = Y_stack[:, nonzero_mask]            # Raw data (for unfiltered output)
+    active_Y_fil = Y_fil_anomaly[:, nonzero_mask]   # Anomaly data (for filtered output)
+    active_Sig_raw = Sig_stack[:, nonzero_mask]
+    active_Sig_fil = Sig_anomaly[:, nonzero_mask]
+    
+    num_active = active_Y.shape[1]
+
+    # 5. Solving Weighted Least Squares
+    model_coef = np.zeros((num_active, num_params))
+    model_coef_fil = np.zeros((num_active, num_params))
+    cov_beta_raw = np.zeros((num_active, num_params, num_params))
+    cov_beta_fil = np.zeros((num_active, num_params, num_params))
+
+    for i in tqdm.tqdm(range(num_active), desc="Solving Regression"):
+        # --- Unfiltered (Absolute Values) ---
+        W_raw = 1.0 / (active_Sig_raw[:, i]**2)
+        TW_raw = T * W_raw[:, np.newaxis]
+        lhs_raw = T.T @ TW_raw
+        inv_lhs_raw = pinv(lhs_raw)
+        model_coef[i] = inv_lhs_raw @ (TW_raw.T @ active_Y[:, i])
+        cov_beta_raw[i] = inv_lhs_raw
+
+        # --- Filtered (Anomalies) ---
+        W_fil = 1.0 / (active_Sig_fil[:, i]**2)
+        TW_fil = T * W_fil[:, np.newaxis]
+        lhs_fil = T.T @ TW_fil
+        inv_lhs_fil = pinv(lhs_fil)
+        model_coef_fil[i] = inv_lhs_fil @ (TW_fil.T @ active_Y_fil[:, i])
+        cov_beta_fil[i] = inv_lhs_fil
+
+    # 6. Reconstruct High-Dimensional Arrays (97, 97, num_params, 2)
+    full_len = Y_stack.shape[1] # 18818
+    mid = 9409
+    
+    # Place solved values back into full-length arrays
+    final_raw = np.zeros((full_len, num_params))
+    final_fil = np.zeros((full_len, num_params))
+    final_cov_raw = np.zeros((full_len, num_params, num_params))
+    final_cov_fil = np.zeros((full_len, num_params, num_params))
+
+    final_raw[nonzero_mask] = model_coef
+    final_fil[nonzero_mask] = model_coef_fil
+    final_cov_raw[nonzero_mask] = cov_beta_raw
+    final_cov_fil[nonzero_mask] = cov_beta_fil
+
+    # Reshape and Stack into (Degree, Order, Parameter, CS_flag)
+    shape_val = (97, 97, num_params)
+    shape_cov = (97, 97, num_params, num_params)
+
+    # Output C/S pairs
+    SH_arr = np.stack([final_raw[:mid].reshape(shape_val), 
+                       final_raw[mid:].reshape(shape_val)], axis=-1)
+    
+    SH_arr_fil = np.stack([final_fil[:mid].reshape(shape_val), 
+                           final_fil[mid:].reshape(shape_val)], axis=-1)
+    
+    cov_SH_arr = np.stack([final_cov_raw[:mid].reshape(shape_cov), 
+                           final_cov_raw[mid:].reshape(shape_cov)], axis=-1)
+    
+    cov_fil_SH_arr = np.stack([final_cov_fil[:mid].reshape(shape_cov), 
+                               final_cov_fil[mid:].reshape(shape_cov)], axis=-1)
+
+    print(f"\nFinal SH_arr shape: {SH_arr_fil.shape}")
+    return model_coef, model_coef_fil, SH_arr, SH_arr_fil, cov_SH_arr, cov_fil_SH_arr
+
+
+
+
+
+
+
 
 # Define The Total Spherical Harmonics Heatmap Values
 def EWH_grid(SH_arr, cov_SH_arr, year_lst, sample_time, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), max_order=96, J2=False, calc_uncertainty=False, excel_output=True, file_name='output.xlsx'):
@@ -439,8 +586,18 @@ def EWH_grid(SH_arr, cov_SH_arr, year_lst, sample_time, lat_precis=30, lon_preci
         lpmv_values = np.nan_to_num(lpmv_values, nan=0.0)
 
         for i, lon in enumerate(colon_array): # Loop over longitudes
+
+            # Correct the Mass Factor
+            mass_factor = (2 * n + 1) / (1 + love_array)
+
+            # Surface Density Calculation
+            term_cos = C_array * np.cos(m * lon)
+            term_sin = S_array * np.sin(m * lon)
+
+            surface_density_terms = (Re * rho_average / 3.0) * ((term_cos + term_sin) * (norm * lpmv_values) * mass_factor)
+
             # Define Value
-            surface_density_terms = Re * (rho_average/3) * ((C_array * np.cos(m * lon)) + (S_array * np.sin(m * lon))) * (norm * lpmv_values) * ((1 + (2 * n))/(1 + love_array))
+            #surface_density_terms = Re * (rho_average/3) * ((C_array * np.cos(m * lon)) + (S_array * np.sin(m * lon))) * (norm * lpmv_values) * ((1 + (2 * n))/(1 + love_array))
             surface_density = np.sum(surface_density_terms)
 
             # Append Value To Coordinate Grid
@@ -554,58 +711,63 @@ def EWH_grid(SH_arr, cov_SH_arr, year_lst, sample_time, lat_precis=30, lon_preci
 
 # Define Single Plot Render
 def render_single(earth_grid_EWH, date, sample_time, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi)):
-    # Define Analysis Region In Degrees
-    lon_range_deg = np.degrees(lon_range)
-    lat_range_deg = np.degrees(lat_range)
-
-    # Load Map Image & Take Its Dimensions
-    map_img = plt.imread("Gravity_Maps/Mercator_Map.jpg")  # Mercator_Map
-    img_height, img_width, _ = map_img.shape
-
-    # Define Global Latitude & Longitude Range Of The Image
-    global_lon_range = (-180, 180)
-    global_lat_range = (-90, 90)
-
-    # Calculate Cropping Indices For Longitude
-    lon_min_idx = int((lon_range_deg[0] - global_lon_range[0]) / (global_lon_range[1] - global_lon_range[0]) * img_width)
-    lon_max_idx = int((lon_range_deg[1] - global_lon_range[0]) / (global_lon_range[1] - global_lon_range[0]) * img_width)
-
-    # Calculate Cropping Indices For Latitude (flip due to image orientation)
-    lat_min_idx = int((global_lat_range[1] - lat_range_deg[1]) / (global_lat_range[1] - global_lat_range[0]) * img_height)
-    lat_max_idx = int((global_lat_range[1] - lat_range_deg[0]) / (global_lat_range[1] - global_lat_range[0]) * img_height)
-
-    # Crop the map image to match the lat/lon range (latitude indices flipped)
-    cropped_map = map_img[lat_min_idx:lat_max_idx, lon_min_idx:lon_max_idx]
-
-    # Determine the data range for normalization
-    vmin = np.min(earth_grid_EWH)
-    vmax = np.max(earth_grid_EWH)
-
-    # Create a normalization instance centered at zero
-    norm = TwoSlopeNorm(vmin=vmin, vcenter=0, vmax=vmax)
-
-    # Create the heatmap
-    plt.figure(figsize=(10, 5))
-
-    # Plot the cropped map image with the adjusted extent
-    plt.imshow(cropped_map, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], aspect='auto')
-
-    # Overlay the heatmap with transparency
-    plt.imshow(earth_grid_EWH, extent=[lon_range_deg[0], lon_range_deg[1], lat_range_deg[0], lat_range_deg[1]], origin="upper", alpha=0.6, cmap="coolwarm", norm=norm, aspect="auto")  # Replace With "seismic" For More Contrast
+    """
+    Renders a gravity acceleration heatmap using Cartopy.
     
-    # Add labels and title
-    plt.xlabel("Longitude [deg]")
-    plt.ylabel("Latitude [deg]")
-    plt.title(f"LSQR Model At t = {sample_time} Days ({date[:2]}-{date[2:4]}-{date[4:]})")
-    plt.colorbar(label="Equivalent Water Height [mm]")
+    Args:
+        earth_grid_acc (np.ndarray): 2D array of values.
+        date (str): Date string for the title/filename.
+        lat_range/lon_range (tuple): Radians, defining the extent of earth_grid_acc.
+    """
+    # Convert Input Ranges From Radians To Degrees
+    lon_deg = np.degrees(lon_range)
+    lat_deg = np.degrees(lat_range)
 
-    # Show And Save The Plot
+    # Setup Plot And Projection
+    projection = ccrs.PlateCarree()
+    fig, ax = plt.subplots(figsize=(16, 8), subplot_kw={'projection': projection})
+
+    # Set The Map Extent, i.e. Crop
+    ax.set_extent([lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]], crs=ccrs.PlateCarree())
+
+    # Add Background Features 
+    ax.add_feature(cfeature.LAND, facecolor='lightgray')
+    ax.add_feature(cfeature.OCEAN, facecolor='aliceblue')
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
+    ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
+
+    # Overlay The Data (Extent: [min_lon, max_lon, min_lat, max_lat])
+    im = ax.imshow(
+        earth_grid_EWH, 
+        extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
+        transform=ccrs.PlateCarree(),
+        origin='upper', 
+        cmap='coolwarm', 
+        alpha=0.7,
+        zorder=3 # Ensures data stays above the land/ocean colors
+    )
+
+    # Aesthetics
+    plt.title(f"LSQR Model At t = {sample_time} Days ({date[:2]}-{date[2:4]}-{date[4:]})")
+    gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.3)
+    gl.top_labels = False
+    gl.right_labels = False
+
+    # Add Colorbar
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', pad=0.02, aspect=30)
+    cbar.set_label("Equivalent Water Height [mm]", fontsize=12)
+
+    # Save and Show
     filename = f"LSQR_Analysis/Output/EWH_Plot_{date}.png"
-    plt.savefig(filename)
-    print(f"✅ Heatmap Saved To {filename}")
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"\n✅ Map successfully rendered and saved to {filename}")
     plt.show()
 
     return
+
+
+
+
 
 
 '''
@@ -877,7 +1039,7 @@ def LSQR_COEF_TEST(data_year_arr, date_year_arr, year_lst, max_order=96):
     return model_coef, model_coef_fil, SH_arr, SH_arr_fil, cov_SH_arr, cov_fil_SH_arr
 
 
-
+'''
 # Define The Total Spherical Harmonics Heatmap Values
 def EWH_GRID_TEST(SH_arr, cov_SH_arr, year_lst, sample_time, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), max_order=96, J2=False, calc_uncertainty=False, excel_output=True, file_name='output.xlsx'):
     """
@@ -1099,3 +1261,4 @@ def EWH_GRID_TEST(SH_arr, cov_SH_arr, year_lst, sample_time, lat_precis=30, lon_
         print(f"\n✅ Data Written To LSQR_Analysis/Output/{file_name}\n")
 
     return earth_grid_EWH, earth_grid_EWH_uncertainty
+'''

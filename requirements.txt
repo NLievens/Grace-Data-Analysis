@@ -9,3 +9,4 @@ openpyxl
 geopandas
 matplotlib
 collections
+statsmodels
