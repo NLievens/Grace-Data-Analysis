@@ -75,8 +75,8 @@ def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range
     colon_array = np.linspace(colon_range[0], colon_range[1], lon_precis)
 
     # Define Constants
-    mu = 3.9860044150e+5 
-    Re = 6378.13630000 
+    mu = 3.9860044150e+5    # Earth's Gravitational Parameter in km^3/s^2
+    Re = 6378.13630000      # Earth's Mean Radius in km
     r = Re
     
     # Degrees n (2 to 96) And Orders m (0 to 96)
@@ -142,6 +142,7 @@ def spherical_harmonics_date(data_array, lat_precis=30, lon_precis=60, lat_range
     # Convert Acceleration Data From km/s2 To m/s2
     earth_grid_acc *= 1e3
     
+    # Save Data To Excel File
     if save_xlsx:
         # Format Potential And Acceleration Data
         lat_array = np.linspace(lat_range[1], lat_range[0], lat_precis)

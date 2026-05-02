@@ -251,7 +251,7 @@ if mod_choice == '1':
     
     chosen_date = dt_date(year, month, day)
     start_date = dt_date(year_lst[0], 1, 1)
-    sample_time = (chosen_date - start_date).days
+    elapsed_time = (chosen_date - start_date).days
 
     # Print Settings Overview
     clear_lines(custom_length)
@@ -259,13 +259,14 @@ if mod_choice == '1':
         print(f"⚠️  Warning: Chosen Date Is Not In Dataset\n")
 
     print(f"Analysis Dataset    ➜  {year_lst}")
-    print(f"Chosen Sample Time  ➜  Day {sample_time}")
+    print(f"Chosen Sample Time  ➜  Day {elapsed_time}")
     print(f"Latitude Precision  ➜  {lat_precis} Points")
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
-    print(f"Uncertainty         ➜  {'Included' if calc_uncertainty else 'Excluded'}\n")
-    
+    print(f"Uncertainty         ➜  {'Included' if calc_uncertainty else 'Excluded'}")
+    print(f"Excel Output        ➜  {f'EWH_{chosen_date}.xlsx' if save_xlsx else 'None'}\n")
+
     # Determine Delta Stokes Coefficients And STDs For Each Month In The Dataset
     delta_t_lst, mask, org_tot_size, CS_delta_vectors, CS_std_delta_vectors = compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96)
 
@@ -274,20 +275,18 @@ if mod_choice == '1':
     # Define Model Coefficients Through LSQR
     model_coef, SH_arr, cov_SH_arr = compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vectors, mask, org_tot_size, calc_uncertainty=calc_uncertainty, max_order=96)
 
-    print(f"\n✅ Model Coefficients Determined {model_coef.shape}\n")
-
-    '''
-    # Define LSQR Coefficients
-    model_coef, model_coef_fil, SH_arr, SH_arr_fil, cov_SH_arr, cov_fil_SH_arr = LSQR_coefficients(data_year_arr, date_year_arr, year_lst)
-
+    print(f"\n✅ Model Coefficients Determined {model_coef.shape}")
     
-
+    print(f"\n✅ Spherical Harmonics Reconstructed {SH_arr.shape}\n")
+    
     # Define EWH Grid
-    earth_grid_EWH, earth_grid_EWH_uncertainty = EWH_grid(SH_arr_fil, cov_fil_SH_arr, year_lst, sample_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, calc_uncertainty=calc_uncertainty, file_name='EWH_Grid.xlsx')
-
+    earth_grid_pot, earth_grid_EWH = compute_EWH_grid(SH_arr, elapsed_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=False, save_xlsx=save_xlsx, file_name=f'EWH_{chosen_date}.xlsx')
+    
+    print(f"\n✅ EWH Grid Computed {earth_grid_EWH.shape}")
+    
     # Render Heatmap
-    render_single(earth_grid_EWH, user_date, sample_time, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi))
-    '''
+    render_single(earth_grid_EWH, user_date, elapsed_time, lat_range=lat_range, lon_range=lon_range)
+    
 
 elif mod_choice == '2':
     # Print Confirmation Statement

@@ -11,6 +11,7 @@ import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import cartopy.feature as cfeature
 from scipy.interpolate import interp1d
+from scipy.special import lpmv, factorial
 
 # Internal Imports
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -169,7 +170,7 @@ def T_row(ti):
     '''
 
     return np.array([ 
-        1,                                              # 0 // Constant
+        #1,                                              # 0 // Constant
         ti,                                             # 1 // Linear trend
         ti**2,                                          # 2 // Quadratic trend
         np.cos(2 * np.pi * ti / 365.2500),              # 3 // Annual (Cosine)
@@ -219,8 +220,8 @@ def compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vecto
 
     Returns:
         coeff_models (np.ndarray): Array of shape (num_coeffs, num_params) containing the model coefficients for each spherical harmonic coefficient.
-        SH_arr (np.ndarray): Array of shape (side, side, num_params, 2) containing the reconstructed C and S coefficients for each spherical harmonic degree/order.
-        cov_SH_arr (np.ndarray or None): Array of shape (side, side, num_params, num_params, 2) containing the covariance matrices for the model coefficients of each spherical harmonic degree/order, or None if calc_uncertainty is False.
+        SH_arr (np.ndarray): Array of shape (m_limit, m_limit, num_params, 2) containing the reconstructed C and S coefficients for each spherical harmonic degree/order.
+        cov_SH_arr (np.ndarray or None): Array of shape (m_limit, m_limit, num_params, num_params, 2) containing the covariance matrices for the model coefficients of each spherical harmonic degree/order, or None if calc_uncertainty is False.
     '''
 
     # Setup Data
@@ -280,121 +281,173 @@ def compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vecto
 
     return coeff_models, SH_arr, cov_SH_arr
 
+# Define EWH Grid Calculation
+def compute_EWH_grid(SH_arr, elapsed_time, lat_precis=30, lon_precis=60, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi), J2=False, save_xlsx=False, file_name='output.xlsx'):
+    '''
+    Computes the Equivalent Water Height (EWH) grid from the spherical harmonic coefficients.
+    
+    Args:
+        SH_arr (np.ndarray): Array of shape (m_limit, m_limit, num_params, 2) containing the reconstructed C and S coefficients for each spherical harmonic degree/order.
+        elapsed_time (int): Time delta in days from the reference time t0 for which to compute the EWH grid.
+        lat_precis (int): Latitude precision in points.
+        lon_precis (int): Longitude precision in points.
+        lat_range (tuple): Radians, defining the extent of the latitude range.
+        lon_range (tuple): Radians, defining the extent of the longitude range.
+        J2 (bool): Whether to include the J2 coefficient.
+        save_xlsx (bool): Whether to save the output to an Excel file.
+        file_name (str): Name of the Excel file to save (Always add .xlsx extension).
 
-# 
+    Returns:
+        earth_grid_pot (np.ndarray): 2D array of gravitational potential values on the defined grid.
+        earth_grid_EWH (np.ndarray): 2D array of Equivalent Water Height values on the defined grid.
+    '''
 
-'''
-def compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vectors, calc_uncertainty=False, max_order=96):
-    # Transform Time List To Array
-    delta_t_arr = np.array(delta_t_lst)
+    # Define Constants
+    mu = 3.9860044150e+5    # [km^3/s^2] Gravitational Parameter Of The Earth (WGS84) (Must Be In Same Units As Re For Potential Calculation)
+    Re = 6378.13630000      # [km] Mean Radius Of The Earth (WGS84) (Must Be In Same Units As mu For Potential Calculation)
+    r = Re
 
-    # Define The Y And std Values For Each Coefficient // Stack all column vectors horizontally to get a 2D array of shape (num_coeffs, num_months)
-    stacked_CS_array = np.hstack(CS_delta_vectors)
-    stacked_CS_std_array = np.hstack(CS_std_delta_vectors)
+    rho_water = 1000        # [kg/m^3] Density Of Water
+    rho_average = 5515      # [kg/m^3] Average Surface Density Of The Earth
 
-    grouped_coefficients = [list(row) for row in stacked_CS_array]
-    grouped_std_coefficients = [list(row) for row in stacked_CS_std_array]
+    # Define Stokes Coefficients At Measurement Time
+    T = T_row(elapsed_time)
+    C_t = SH_arr[:, :, :, 0] @ T
+    S_t = SH_arr[:, :, :, 1] @ T
 
-    # Initialise Model Coefficients List
-    coeff_models = []
-    coeff_cov_beta = []
+    # Define Coordinate Grid
+    colat_range = ((np.pi / 2) - lat_range[1], (np.pi / 2) - lat_range[0])
+    colat_array = np.linspace(colat_range[0], colat_range[1], lat_precis)
+    
+    colon_range = (lon_range[0] + np.pi, lon_range[1] + np.pi)
+    colon_array = np.linspace(colon_range[0], colon_range[1], lon_precis)
 
-    # Initialise Weighted Aggregate
-    total_ssr = 0.0
-    total_sst = 0.0
+    # Degrees n (2 to 96) And Orders m (0 to 96)
+    n_vals = np.arange(2, 97)[:, np.newaxis] # (95, 1)
+    m_vals = np.arange(0, 97)[np.newaxis, :] # (1, 97)
+    
+    # Broadcast To (95, 97) Shape Automatically
+    n = np.broadcast_to(n_vals, (95, 97))
+    m = np.broadcast_to(m_vals, (95, 97))
+    
+    # Define Legendre Polynomials And Normalize
+    valid_mask = m <= n
+    delta_0_m = (m == 0).astype(np.float64)
+    numer = (2 - delta_0_m) * ((2 * n) + 1) * factorial(n - m)
+    denom = factorial(n + m)
+    norm = np.zeros_like(n, dtype=np.float64)
+    norm[valid_mask] = np.sqrt(numer[valid_mask] / denom[valid_mask])
 
-    # Calculate Model Coefficients
-    for coefficient_index in range(len(grouped_coefficients)):
-        # Extract Y for the current coefficient across all months
-        Y = np.array([grouped_coefficients[coefficient_index][i] for i in range(len(grouped_coefficients[coefficient_index]))])
+    if not J2:
+        norm[0, 0] = 0.0 # Remove J2 if not wanted
+
+    # Pre-compute Legendre Matrix: Shape (lat_precis, 95, 97) And Apply Normalization
+    weighted_lpmv = np.zeros((lat_precis, 95, 97))
+    for j, colat in enumerate(tqdm.tqdm(colat_array, desc="Pre-Computing Normalized Legendre Polynomials Per Coordinate")):
+        l_vals = lpmv(m, n, np.cos(colat))
+        weighted_lpmv[j] = np.nan_to_num(l_vals, nan=0.0) * norm
+    print()
+
+    # Pre-Compute Trigonometric Relations (Shape = (lon_precis, 97))
+    m_range = np.arange(97)
+    cos_m_phi = np.cos(m_range[np.newaxis, :] * colon_array[:, np.newaxis])
+    sin_m_phi = np.sin(m_range[np.newaxis, :] * colon_array[:, np.newaxis])
+
+    # Format Data
+    C_form = C_t[2:, :].reshape(95, 97)   # Shape (95, 97) -> Degrees 2-96, Orders 0-96 (Remove First 2 Degrees)
+    S_form = S_t[2:, :].reshape(95, 97)   # Shape (95, 97) -> Degrees 2-96, Orders 0-96 (Remove First 2 Degrees)
+
+    # Define Love Numbers
+    degrees, love_numbers = get_love_numbers()
+
+    # Apply Love Number Correction
+    all_degrees = np.arange(97)
+    love_corr_full = (2 * all_degrees + 1) / (1 + love_numbers)
+    love_corr = love_corr_full[2:]      # Shape (95,) -> Remove First 2 Degrees To Match C_form And S_form Shapes
+
+    C = C_form * love_corr[:, None]
+    S = S_form * love_corr[:, None]
+
+    # Initialise Data Lists
+    earth_grid_pot = np.zeros((lat_precis, lon_precis))
+    earth_grid_rho = np.zeros((lat_precis, lon_precis))
+
+    # Run Over All Coordinates
+    for j in tqdm.tqdm(range(lat_precis), desc="Processing Coordinates"):
+        L_j = weighted_lpmv[j]
         
-        # Extract sigma (standard deviations) for the same coefficient
-        sigma = np.array([grouped_std_coefficients[coefficient_index][i] for i in range(len(grouped_std_coefficients[coefficient_index]))])
+        # Weighted coefficients summed over degree n
+        C_sum_pot = np.sum(C_form * L_j, axis=0)      # Vector length 97
+        S_sum_pot = np.sum(S_form * L_j, axis=0)      # Vector length 97
+        C_sum_rho = np.sum(C * L_j, axis=0)      # Vector length 97
+        S_sum_rho = np.sum(S * L_j, axis=0)      # Vector length 97
 
-        # Build the matrix T for the current coefficient
-        T = np.vstack([T_row(ti) for ti in delta_t_arr])
+        # Dot product for all longitudes at once
+        pot_row = (cos_m_phi @ C_sum_pot) + (sin_m_phi @ S_sum_pot)
+        mass_row = (cos_m_phi @ C_sum_rho) + (sin_m_phi @ S_sum_rho)
 
-        # Create The Weighted Least Squares Model
-        model = sm.WLS(Y, T, weights=(1/(sigma**2)))
+        earth_grid_pot[j, :] += (mu / Re) * pot_row + (mu / r)
+        earth_grid_rho[j, :] += Re * (rho_average/3) * mass_row
+
+    # Translate Surface Density Data [km*kg/m^3] To EWH [mm]
+    earth_grid_EWH = (earth_grid_rho / rho_water) * 1e6
+
+    # Save Data To Excel File
+    if save_xlsx:
+        # Format Potential And Equivalent Water Height Data
+        lat_array = np.linspace(lat_range[1], lat_range[0], lat_precis)
+        lat_array_degree = np.degrees(lat_array)
+        lat_array_degree = lat_array_degree.reshape(-1, 1)
+        pot_first_column = np.vstack([["km2/s2"], lat_array_degree])
+        ewh_first_column = np.vstack([["mm"], lat_array_degree])
+
+        pot_grid_data = np.vstack((np.degrees(colon_array), earth_grid_pot))
+        pot_grid_data = np.hstack((pot_first_column, pot_grid_data))
+
+        ewh_grid_data = np.vstack((np.degrees(colon_array), earth_grid_EWH))
+        ewh_grid_data = np.hstack((ewh_first_column, ewh_grid_data))
+
+        # Define DataFrames For Excel Output
+        df1 = pd.DataFrame(C)
+        df2 = pd.DataFrame(S)
+        df3 = pd.DataFrame(norm)
+        df4 = pd.DataFrame(pot_grid_data)
+        df5 = pd.DataFrame(ewh_grid_data)
+
+        # Create File Path
+        file_path = os.path.join("LSQR_Analysis/Output", file_name)
+
+        # Save To Different Sheets In Excel Files
+        with pd.ExcelWriter(file_path, engine="openpyxl") as writer:
+            df1.to_excel(writer, sheet_name="C-Coefficients", index=False)
+            df2.to_excel(writer, sheet_name="S-Coefficients", index=False)
+            df3.to_excel(writer, sheet_name="Normalization Factors", index=False)
+            df4.to_excel(writer, sheet_name="Gravity Potential", index=False, header=False)
+            df5.to_excel(writer, sheet_name="Equivalent Water Height", index=False, header=False)
         
-        # Fit The Model
-        results = model.fit()
-        
-        # Store The Model Coefficients Of The Current Spherical Harmonic
-        coeff_models.append(results.params)
+        # Load the workbook to modify styles
+        wb = openpyxl.load_workbook(file_path)
 
-        # Determine Covariance Matrices Per Coefficient Of The Model [(p x p) NumPy array]
-        coeff_cov_beta.append(results.cov_params())
+        # Apply formatting to the last two sheets
+        for sheet_name in ["Gravity Potential", "Equivalent Water Height"]:
+            ws = wb[sheet_name]
 
-        # Define Residuals And Weighted Aggregate
-        Y_pred = results.predict()
-        residuals = Y - Y_pred
+            # Bold the first row (headers)
+            for cell in ws[1]:  # First row
+                cell.font = openpyxl.styles.Font(bold=True)
 
-        total_ssr += np.sum(residuals**2)  # Sum of squared residuals
-        total_sst += np.sum((Y - np.mean(Y))**2)  # Total sum of squares
-        
-    # Define Output
-    model_coef = np.array(coeff_models)  # (9405, coef)
+            # Bold the first column (excluding header row)
+            for row in ws.iter_rows(min_row=2, max_row=ws.max_row, min_col=1, max_col=1):
+                for cell in row:
+                    cell.font = openpyxl.styles.Font(bold=True)
 
-    cov_beta_array = np.array(coeff_cov_beta)  # (9405, coef, coef)
+        # Save the modified file
+        wb.save(file_path)
 
-    # Define Weighted Aggregate
-    r_squared = 1 - (total_ssr / total_sst)
+        # Print Completion Statement
+        print(f"\n✅ Data Written To {file_name}")
 
-    # Print Progress Statement
-    print("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-")
-    print(f"Coefficients Determined {model_coef.shape}")
-    print(f"Filtered R² // {round(r_squared, 4)}")
-    print("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n")
-
-    # Reconstruct The Original Input Matrix Shape And Add Back The Zero Entries
-    CS_reconstructed = np.zeros((CS_array_original.shape[0], model_coef.shape[1]))
-    CS_reconstructed[nonzero_mask] = model_coef
-
-    #split The Reconstructed Matrix Into The C And S Arrays
-    C_reconstructed = CS_reconstructed[:9409,:]
-    S_reconstructed = CS_reconstructed[9409:,:]
-
-    # Recreate A 3D Array Of The Matrices (C, S, Model Coefficients)
-    reconstructed_data_arr = np.stack([C_reconstructed, S_reconstructed], axis=2)
-
-    #Reshape (Unflatten In Same Way) The Array To Get The Needed Input For The Spherical Harmonics Code
-    shape = (97, 97, model_coef.shape[1], 2)
-    SH_arr = reconstructed_data_arr.reshape(shape)
-
-    # Create empty arrays to hold the full (97, 97, p, p, 2) structures
-    cov_SH_arr = np.zeros((97, 97, model_coef.shape[1], model_coef.shape[1], 2))
-
-    # Find the indices where coefficients are non-zero (True in the mask)
-    nonzero_indices = np.where(nonzero_mask)[0]
-
-    # Loop over the nonzero coefficients and assign values accordingly
-    for idx, flat_idx in enumerate(nonzero_indices):
-        if flat_idx < 9409:
-            # It's a C coefficient
-            i = flat_idx // 97
-            j = flat_idx % 97
-            cov_SH_arr[i, j, :, :, 0] = cov_beta_array[idx]
-        else:
-            # It's an S coefficient
-            s_idx = flat_idx - 9409
-            i = s_idx // 97
-            j = s_idx % 97
-            cov_SH_arr[i, j, :, :, 1] = cov_beta_array[idx]
-
-    # Print Completion Statement
-    print("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-")
-    print(f"Created // model_coef {np.shape(model_coef)}")
-    print(f"Created // SH_arr {np.shape(SH_arr)}")
-    print(f"Created // cov_SH_arr {np.shape(cov_SH_arr)}")
-    print("-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n")
-
-    return model_coef, SH_arr, cov_SH_arr
-'''
-
-
-
-
+    return earth_grid_pot, earth_grid_EWH
 
 # Define Single Plot Render
 def render_single(earth_grid_EWH, date, sample_time, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi)):
