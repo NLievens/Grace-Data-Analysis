@@ -1,43 +1,3 @@
-"""
-Data Reader for GRACE and GRACE-FO Parsed Datasets
-
-This script reads and processes GRACE and GRACE-FO gravity field data from a directory
-containing pre-parsed text files. Each file includes spherical harmonic coefficients 
-along with metadata such as start and end dates and standard deviations.
-
-Main Features:
---------------
-- Loads all `.txt` files from the "Data/Parsed_Data" folder.
-- Extracts date information from each file and stores it in `DDMMYYYY_DDMMYYYY` format.
-- Parses data into a structured 3D NumPy array [degree, order, values].
-- Organizes data by year and month into a 5D array of shape: 
-  (n_years, 12 months, 97, 97, 4) (where 4 = [clm, slm, clm_std, slm_std]).
-- Maps monthly time points into a uniform structure, inserting `"empty"` if data is missing.
-- Builds a structured date array aligned with the data array.
-
-Dependencies:
--------------
-- `numpy`
-- `tqdm`
-- `pathlib`
-- `datetime`
-- `collections`
-
-Output Variables:
------------------
-- `data_year_arr` : np.ndarray
-    A 5D array with shape (n_years, 12, 97, 97, 4) containing the data
-- `date_year_arr` : np.ndarray
-    A 2D array with shape (n_years, 12) containing date strings or `"empty"`
-- `data_lib` : list
-    List of dicts with shape (236,) containing date strings and corresponding data arrays
-- `sorted_date_lst` : list
-    List of reformatted dates as DDMMYYYY_DDMMYYYY strings for sorting with shape (236,)
-
-Raises:
--------
-- `FileNotFoundError` if the expected data folder is not found.
-"""
 
 # External Imports
 import io
@@ -244,14 +204,14 @@ def extract_slr_coefficients():
         raise ValueError("Could not find 'Product:' header in the TN-14 file. Check file format.")
 
     # 2. Read the data using the standard library io.StringIO
-    # We use columns: 1 (DecYear), 2 (C20), and 5 (C30)
+    # We use columns: 1 (DecYear), 2 (C20), 4 (C20_std), 5 (C30), 7 (C30_std)
     # Note: Column indices are 0-based in pandas read_csv
     data_str = "".join(lines[data_start:])
     df = pd.read_csv(io.StringIO(data_str), 
                      sep=r'\s+', 
                      header=None,
-                     usecols=[1, 2, 5], 
-                     names=['DecYear', 'C20', 'C30'])
+                     usecols=[1, 2, 4, 5, 7], 
+                     names=['DecYear', 'C20', 'C20_std', 'C30', 'C30_std'])
 
     # 3. Convert Decimal Year to MMYYYY key
     def deyear_to_mmyyyy(dy):
@@ -281,7 +241,7 @@ def extract_slr_coefficients():
 
     # 6. Convert to Dictionary
     # Format: {'042002': {'C20': -0.000484, 'C30': nan}, ...}
-    library = df_unique[['C20', 'C30']].to_dict('index')
+    library = df_unique[['C20', 'C20_std', 'C30', 'C30_std']].to_dict('index')
     
     return library
 

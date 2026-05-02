@@ -12,7 +12,6 @@ from datetime import date as dt_date
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from Data.Data_Reader import *
 from LSQR_Functions import *
-from LSQR import *
 
 # Functions
 def clear_lines(n):
@@ -217,15 +216,33 @@ if mod_choice == '1':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Ask User If He Wants To Calculate The Uncertainty Or Not
+    unc_choice = input("\nInclude Uncertainty Calculations? (⚠️  Warning: Significantly Longer Processing Times) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if unc_choice == 'y':
+        calc_uncertainty = True
+        clear_lines(1)
+        print("Uncertainty Calculations Included")
+    
+    else:
+        calc_uncertainty = False
+        clear_lines(1)
+        print("Uncertainty Calculations Excluded")
+
     # Save Data To Excel
     custom_length += 2
     xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
 
     if xlsx_choice == 'y':
         save_xlsx = True
+        clear_lines(1)
+        print("Data Will Be Saved To Excel")
     
     else:
         save_xlsx = False
+        clear_lines(1)
+        print("Data Will Not Be Saved To Excel")
 
     # Define Sample_Time
     day = int(user_date[:2])
@@ -246,40 +263,24 @@ if mod_choice == '1':
     print(f"Latitude Precision  ➜  {lat_precis} Points")
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
-    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
+    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
+    print(f"Uncertainty         ➜  {'Included' if calc_uncertainty else 'Excluded'}\n")
+    
+    # Determine Delta Stokes Coefficients And STDs For Each Month In The Dataset
+    delta_t_lst, mask, org_tot_size, CS_delta_vectors, CS_std_delta_vectors = compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96)
 
-    delta_t_lst_old, data_CS_vector_lst_old, data_CS_vector_lst_fil_old, data_CS_std_vector_lst_old = compute_delta_harmonics_old(data_year_arr, date_year_arr, year_lst, max_order=96)
-    delta_t_lst_new, data_CS_vector_lst_new, data_CS_vector_lst_fil_new, data_CS_std_vector_lst_new = compute_delta_harmonics_new(data_year_arr, date_year_arr, year_lst, max_order=96)
+    print(f"\n✅ Delta Coefficients Determined {CS_delta_vectors.shape}\n")
 
-    def compare_results(list_old, list_new):
-        # Check if lengths match first
-        if len(list_old) != len(list_new):
-            return False
-        
-        # Check each array pair
-        return all(np.array_equal(a, b) for a, b in zip(list_old, list_new))
+    # Define Model Coefficients Through LSQR
+    model_coef, SH_arr, cov_SH_arr = compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vectors, mask, org_tot_size, calc_uncertainty=calc_uncertainty, max_order=96)
 
-    # Usage:
-    print(f"Data Match: {compare_results(data_CS_vector_lst_old, data_CS_vector_lst_new)}")
-    print(f"Fil Data Match: {compare_results(data_CS_vector_lst_fil_old, data_CS_vector_lst_fil_new)}")
-    print(f"Delta T Match: {delta_t_lst_old == delta_t_lst_new}") # Simple list of ints
+    print(f"\n✅ Model Coefficients Determined {model_coef.shape}\n")
 
     '''
     # Define LSQR Coefficients
     model_coef, model_coef_fil, SH_arr, SH_arr_fil, cov_SH_arr, cov_fil_SH_arr = LSQR_coefficients(data_year_arr, date_year_arr, year_lst)
 
-    # Ask User If He Wants To Calculate The Uncertainty Or Not
-    unc_choice = input("\nInclude Uncertainty Calculations? (⚠️  Warning: Significantly Longer Processing Times) (Y/N): ").strip().lower()
-
-    if unc_choice == 'y':
-        calc_uncertainty = True
-        clear_lines(1)
-        print(f"✅ Uncertainty Calculations Included \n")
     
-    else:
-        calc_uncertainty = False
-        clear_lines(1)
-        print(f"✅ Uncertainty Calculations Excluded \n")
 
     # Define EWH Grid
     earth_grid_EWH, earth_grid_EWH_uncertainty = EWH_grid(SH_arr_fil, cov_fil_SH_arr, year_lst, sample_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, calc_uncertainty=calc_uncertainty, file_name='EWH_Grid.xlsx')
