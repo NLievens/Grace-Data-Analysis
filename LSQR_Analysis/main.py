@@ -91,8 +91,8 @@ print("""
       
 1. Render Heatmap Of A Single Date [EWH]
 2. Render Heatmap Of A Two Dates [EWH]
-3. Render Heatmap Of Difference Between Two Dates [EWH]
-4. Calculate Volume Changes Over User Specified Areas In Time [EWH]
+3. Perform Modal Analysis On Stokes Coefficient [-]
+4. Calculate Volume Changes Over User Specified Areas In Time [Gt]
 5. Render Model Verification, i.e. Data Versus Model [EWH]
 """)
 
@@ -108,20 +108,37 @@ if mod_choice == '1':
     min_start, max_end = extract_min_max_dates_str(date_year_arr)
     print(f"Available date range: {min_start[:2]}-{min_start[2:4]}-{min_start[4:]} to "f"{max_end[:2]}-{max_end[2:4]}-{max_end[4:]}\n")
 
+    # Ask User For Reference Date
+    user_ref_date = input("Enter Reference Date (t0) [DDMMYYYY]: ")
+
+    if is_date_in_range(user_ref_date, min_start, max_end):
+        reference_date = user_ref_date
+        reference_year = int(user_ref_date[4:])
+        reference_month = int(user_ref_date[2:4])
+        reference_day = int(user_ref_date[:2])
+    
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+
     # Ask User For A Date
-    user_date = input("Enter Date For Analysis [DDMMYYYY]: ")
+    user_ana_date = input("\nEnter Analysis Date (ti) [DDMMYYYY]: ")
     
     # Check Chosen Date Is Valid
-    if is_date_in_range(user_date, min_start, max_end):
-        clear_lines(4)
-        print(f"\n✅ Chosen Date: {user_date[:2]}-{user_date[2:4]}-{user_date[4:]}\n") 
+    if is_date_in_range(user_ana_date, min_start, max_end):
+        chosen_date = user_ana_date
+        chosen_year = int(user_ana_date[4:])
+        chosen_month = int(user_ana_date[2:4])
+        chosen_day = int(user_ana_date[:2])
 
     else:
         print("\n❌ Date is outside the range.")
         exit()
-    
-    # Extract year from the chosen date
-    chosen_year = int(user_date[4:])
+
+    # Print Selected Days
+    clear_lines(6)
+    print(f"\n✅ Reference Date   ➜  {reference_date[:2]}-{reference_date[2:4]}-{reference_date[4:]}")
+    print(f"✅ Chosen Date      ➜  {chosen_date[:2]}-{chosen_date[2:4]}-{chosen_date[4:]}\n")
 
     # Ask User For Entire Or Custom Dataset
     dat_choice = input("Do You Want To Customise The Year Range Of The Dataset? (Y/N): ").strip().lower()
@@ -129,7 +146,7 @@ if mod_choice == '1':
 
     if dat_choice == 'y':
         clear_lines(1)
-        print(f"Custom Dataset Chosen (Beware Of Chosen Year <{chosen_year}>)")
+        print(f"Custom Dataset Chosen (Beware Of Reference Year <{reference_year}> And Chosen Year <{chosen_year}>)")
         # Customize by specifying start and end year
         dataset_start_year = int(input(f"Enter Start Year (>= {min_start[4:]}): ").strip())
         dataset_end_year = int(input(f"Enter End Year (<= {max_end[4:]}): ").strip())
@@ -216,6 +233,18 @@ if mod_choice == '1':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Include Or Exclude J2
+    J2_choice = input("\nInclude C20? (⚠️  Warning: Dominates Other Coefficients) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if J2_choice == 'y':
+        J2 = True
+    
+    else:
+        J2 = False
+        clear_lines(1)
+        print("C20 Coefficient Excluded")
+
     # Ask User If He Wants To Calculate The Uncertainty Or Not
     unc_choice = input("\nInclude Uncertainty Calculations? (⚠️  Warning: Significantly Longer Processing Times) (Y/N): ").strip().lower()
     custom_length += 2
@@ -244,17 +273,16 @@ if mod_choice == '1':
         clear_lines(1)
         print("Data Will Not Be Saved To Excel")
 
-    # Define Sample_Time
-    day = int(user_date[:2])
-    month = int(user_date[2:4])
-    year = int(user_date[4:])
-    
-    chosen_date = dt_date(year, month, day)
-    start_date = dt_date(year_lst[0], 1, 1)
-    elapsed_time = (chosen_date - start_date).days
+    # Define Sample_Time    
+    chosen_date = dt_date(chosen_year, chosen_month, chosen_day)
+    reference_date = dt_date(reference_year, reference_month, reference_day)
+    elapsed_time = (chosen_date - reference_date).days
 
     # Print Settings Overview
     clear_lines(custom_length)
+    if reference_year not in year_lst:
+        print(f"⚠️  Warning: Reference Date Is Not In Dataset\n")
+
     if chosen_year not in year_lst:
         print(f"⚠️  Warning: Chosen Date Is Not In Dataset\n")
 
@@ -264,41 +292,323 @@ if mod_choice == '1':
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
     print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
+    print(f"C20 Coefficient     ➜  {'Included' if J2 else 'Excluded'}")
     print(f"Uncertainty         ➜  {'Included' if calc_uncertainty else 'Excluded'}")
     print(f"Excel Output        ➜  {f'EWH_{chosen_date}.xlsx' if save_xlsx else 'None'}\n")
 
     # Determine Delta Stokes Coefficients And STDs For Each Month In The Dataset
-    delta_t_lst, mask, org_tot_size, CS_delta_vectors, CS_std_delta_vectors = compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96)
+    delta_t_lst, mask, org_tot_size, CS_delta_vectors, CS_std_delta_vectors = compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, reference_date, max_order=96)
 
-    print(f"\n✅ Delta Coefficients Determined {CS_delta_vectors.shape}\n")
+    print(f"\n✅ Delta Coefficients Determined {CS_delta_vectors.shape}")
 
     # Define Model Coefficients Through LSQR
     model_coef, SH_arr, cov_SH_arr = compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vectors, mask, org_tot_size, calc_uncertainty=calc_uncertainty, max_order=96)
 
-    print(f"\n✅ Model Coefficients Determined {model_coef.shape}")
-    
-    print(f"\n✅ Spherical Harmonics Reconstructed {SH_arr.shape}\n")
-    
     # Define EWH Grid
-    earth_grid_pot, earth_grid_EWH = compute_EWH_grid(SH_arr, elapsed_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=False, save_xlsx=save_xlsx, file_name=f'EWH_{chosen_date}.xlsx')
-    
-    print(f"\n✅ EWH Grid Computed {earth_grid_EWH.shape}")
+    earth_grid_pot, earth_grid_EWH = compute_EWH_grid(SH_arr, elapsed_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx, file_name=f'EWH_{chosen_date}.xlsx')
     
     # Render Heatmap
-    render_single(earth_grid_EWH, user_date, elapsed_time, lat_range=lat_range, lon_range=lon_range)
-    
+    render_single(earth_grid_EWH, str(chosen_date), elapsed_time, lat_range=lat_range, lon_range=lon_range)
 
 elif mod_choice == '2':
     # Print Confirmation Statement
     print('\n=== Double Date Heatmap ===\n')
 
+    # Print Available Date Range
+    min_start, max_end = extract_min_max_dates_str(date_year_arr)
+    print(f"Available date range: {min_start[:2]}-{min_start[2:4]}-{min_start[4:]} to "f"{max_end[:2]}-{max_end[2:4]}-{max_end[4:]}\n")
+
+    # Ask User For Reference Date
+    user_ref_date_1 = input("Enter Reference Date (t0) [Plot 1] [DDMMYYYY]: ")
+
+    if is_date_in_range(user_ref_date_1, min_start, max_end):
+        reference_date_1 = user_ref_date_1
+        reference_year_1 = int(user_ref_date_1[4:])
+        reference_month_1 = int(user_ref_date_1[2:4])
+        reference_day_1 = int(user_ref_date_1[:2])
+    
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+
+    # Ask User For A Date
+    user_ana_date_1 = input("\nEnter Analysis Date (ti) [Plot 1] [DDMMYYYY]: ")
+    
+    # Check Chosen Date Is Valid
+    if is_date_in_range(user_ana_date_1, min_start, max_end):
+        chosen_date_1 = user_ana_date_1
+        chosen_year_1 = int(user_ana_date_1[4:])
+        chosen_month_1 = int(user_ana_date_1[2:4])
+        chosen_day_1 = int(user_ana_date_1[:2])
+
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+    
+    # Ask User For Reference Date
+    user_ref_date_2 = input("\nEnter Reference Date (t0) [Plot 2] [DDMMYYYY]: ")
+
+    if is_date_in_range(user_ref_date_2, min_start, max_end):
+        reference_date_2 = user_ref_date_2
+        reference_year_2 = int(user_ref_date_2[4:])
+        reference_month_2 = int(user_ref_date_2[2:4])
+        reference_day_2 = int(user_ref_date_2[:2])
+    
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+
+    # Ask User For A Date
+    user_ana_date_2 = input("\nEnter Analysis Date (ti) [Plot 2] [DDMMYYYY]: ")
+    
+    # Check Chosen Date Is Valid
+    if is_date_in_range(user_ana_date_2, min_start, max_end):
+        chosen_date_2 = user_ana_date_2
+        chosen_year_2 = int(user_ana_date_2[4:])
+        chosen_month_2 = int(user_ana_date_2[2:4])
+        chosen_day_2 = int(user_ana_date_2[:2])
+
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+
+    # Print Selected Days
+    clear_lines(12)
+    print(f"\n✅ Reference Date [Plot 1]  ➜  {reference_date_1[:2]}-{reference_date_1[2:4]}-{reference_date_1[4:]}")
+    print(f"✅ Chosen Date [Plot 1]     ➜  {chosen_date_1[:2]}-{chosen_date_1[2:4]}-{chosen_date_1[4:]}")
+
+    print(f"\n✅ Reference Date [Plot 2]  ➜  {reference_date_2[:2]}-{reference_date_2[2:4]}-{reference_date_2[4:]}")
+    print(f"✅ Chosen Date [Plot 2]     ➜  {chosen_date_2[:2]}-{chosen_date_2[2:4]}-{chosen_date_2[4:]}\n")
+
+
+
+
+
+
+
+
 elif mod_choice == '3':
     # Print Confirmation Statement
-    print('\n=== Difference Heatmap ===\n')
+    print('\n=== Modal Analysis ===\n')
 
 elif mod_choice == '4':
     # Print Confirmation Statement
     print('\n=== Volume Change Calculation ===\n')
+
+    # Print Available Date Range
+    min_start, max_end = extract_min_max_dates_str(date_year_arr)
+    print(f"Available date range: {min_start[:2]}-{min_start[2:4]}-{min_start[4:]} to "f"{max_end[:2]}-{max_end[2:4]}-{max_end[4:]}\n")
+
+    # Ask User For Reference Date
+    user_ref_date = input("Enter Reference Date (t0) [DDMMYYYY]: ")
+
+    if is_date_in_range(user_ref_date, min_start, max_end):
+        reference_date = user_ref_date
+        reference_year = int(user_ref_date[4:])
+        reference_month = int(user_ref_date[2:4])
+        reference_day = int(user_ref_date[:2])
+    
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+
+    # Ask User For A Date
+    user_ana_date = input("\nEnter Analysis Date (ti) [DDMMYYYY]: ")
+    
+    # Check Chosen Date Is Valid
+    if is_date_in_range(user_ana_date, min_start, max_end):
+        chosen_date = user_ana_date
+        chosen_year = int(user_ana_date[4:])
+        chosen_month = int(user_ana_date[2:4])
+        chosen_day = int(user_ana_date[:2])
+
+    else:
+        print("\n❌ Date is outside the range.")
+        exit()
+
+    # Print Selected Days
+    clear_lines(6)
+    print(f"\n✅ Reference Date   ➜  {reference_date[:2]}-{reference_date[2:4]}-{reference_date[4:]}")
+    print(f"✅ Chosen Date      ➜  {chosen_date[:2]}-{chosen_date[2:4]}-{chosen_date[4:]}\n")
+
+    # Ask User For Entire Or Custom Dataset
+    dat_choice = input("Do You Want To Customise The Year Range Of The Dataset? (Y/N): ").strip().lower()
+    custom_length = 1
+
+    if dat_choice == 'y':
+        clear_lines(1)
+        print(f"Custom Dataset Chosen (Beware Of Reference Year <{reference_year}> And Chosen Year <{chosen_year}>)")
+        # Customize by specifying start and end year
+        dataset_start_year = int(input(f"Enter Start Year (>= {min_start[4:]}): ").strip())
+        dataset_end_year = int(input(f"Enter End Year (<= {max_end[4:]}): ").strip())
+
+        # Validate input bounds
+        min_year = int(min_start[4:])
+        max_year = int(max_end[4:])
+        if dataset_start_year < min_year or dataset_end_year > max_year or dataset_start_year > dataset_end_year:
+            print("❌ Invalid Year Range Chosen")
+            exit()
+
+        year_lst = list(range(dataset_start_year, dataset_end_year + 1))
+        custom_length += 2
+    
+    else:
+        clear_lines(1)
+        print("Full Dataset Chosen")
+        # Use Entire Dataset
+        dataset_start_year = int(min_start[4:])
+        dataset_end_year = int(max_end[4:])
+        year_lst = list(range(dataset_start_year, dataset_end_year + 1))
+
+    # Ask User If They Want To Remove Certain Years From Dataset
+    exc_choice = input("\nDo You Want To Exclude Specific Years From The Dataset? (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if exc_choice == 'y':
+        clear_lines(1)
+        exclude_years_str = input("Enter Years To Exclude (comma-separated, e.g. 2005,2010,2012): ").strip()
+        try:
+            exclude_years = {int(y.strip()) for y in exclude_years_str.split(",") if y.strip()}
+
+        except ValueError:
+            print("❌ Invalid Input For Years To Exclude")
+            exit()
+
+        # Filter the full list to exclude those years
+        year_lst = [y for y in year_lst if y not in exclude_years]
+        custom_length += 2
+    
+    else:
+        clear_lines(1)
+        print("No Exclusions")
+    
+    # Define Standard Or Custom Precision
+    acc_choice = input("\nCustom Precision? (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if acc_choice == 'y':
+        custom_length += 2
+        lat_precis = int(input("Latitude Precision (e.g. 30): ").strip() or 30)
+        lon_precis = int(input("Longitude Precision (e.g. 60): ").strip() or 60)
+    
+    else:
+        clear_lines(1)
+        print("Standard Presicion Chosen")
+        lat_precis = 30
+        lon_precis = 60
+    
+    # Define Standard Or Custom Zone
+    zon_choice = input("\nCustom Analysis Zone? (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if zon_choice == 'y':
+        custom_length += 4
+        lat_min = float(input("Min Latitude [deg]: ").strip() or -90)
+        lat_max = float(input("Max Latitude [deg]: ").strip() or 90)
+        lon_min = float(input("Min Longitude [deg]: ").strip() or -180)
+        lon_max = float(input("Max Longitude [deg]: ").strip() or 180)
+
+        # Convert to radians
+        lat_range = (np.radians(lat_min), np.radians(lat_max))
+        lon_range = (np.radians(lon_min), np.radians(lon_max))
+    
+    else:
+        clear_lines(1)
+        print("Standard Zone Chosen")
+        lat_min = -90
+        lat_max = 90
+        lon_min = -180
+        lon_max = 180
+
+        # Convert to radians
+        lat_range = (np.radians(lat_min), np.radians(lat_max))
+        lon_range = (np.radians(lon_min), np.radians(lon_max))
+    
+    # Include Or Exclude J2
+    J2_choice = input("\nInclude C20? (⚠️  Warning: Dominates Other Coefficients) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if J2_choice == 'y':
+        J2 = True
+    
+    else:
+        J2 = False
+        clear_lines(1)
+        print("C20 Coefficient Excluded")
+
+    # Ask User If He Wants To Calculate The Uncertainty Or Not
+    unc_choice = input("\nInclude Uncertainty Calculations? (⚠️  Warning: Significantly Longer Processing Times) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if unc_choice == 'y':
+        calc_uncertainty = True
+        clear_lines(1)
+        print("Uncertainty Calculations Included")
+    
+    else:
+        calc_uncertainty = False
+        clear_lines(1)
+        print("Uncertainty Calculations Excluded")
+
+    # Save Data To Excel
+    custom_length += 2
+    xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
+
+    if xlsx_choice == 'y':
+        save_xlsx = True
+        clear_lines(1)
+        print("Data Will Be Saved To Excel")
+    
+    else:
+        save_xlsx = False
+        clear_lines(1)
+        print("Data Will Not Be Saved To Excel")
+
+    # Define Sample_Time    
+    chosen_date = dt_date(chosen_year, chosen_month, chosen_day)
+    reference_date = dt_date(reference_year, reference_month, reference_day)
+    elapsed_time = (chosen_date - reference_date).days
+
+    # Print Settings Overview
+    clear_lines(custom_length)
+    if reference_year not in year_lst:
+        print(f"⚠️  Warning: Reference Date Is Not In Dataset\n")
+
+    if chosen_year not in year_lst:
+        print(f"⚠️  Warning: Chosen Date Is Not In Dataset\n")
+
+    print(f"Analysis Dataset    ➜  {year_lst}")
+    print(f"Chosen Sample Time  ➜  Day {elapsed_time}")
+    print(f"Latitude Precision  ➜  {lat_precis} Points")
+    print(f"Longitude Precision ➜  {lon_precis} Points")
+    print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
+    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
+    print(f"C20 Coefficient     ➜  {'Included' if J2 else 'Excluded'}")
+    print(f"Uncertainty         ➜  {'Included' if calc_uncertainty else 'Excluded'}")
+    print(f"Excel Output        ➜  {f'EWH_{chosen_date}.xlsx' if save_xlsx else 'None'}\n")
+
+    # Determine Delta Stokes Coefficients And STDs For Each Month In The Dataset
+    delta_t_lst, mask, org_tot_size, CS_delta_vectors, CS_std_delta_vectors = compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, reference_date, max_order=96)
+
+    print(f"\n✅ Delta Coefficients Determined {CS_delta_vectors.shape}")
+
+    # Define Model Coefficients Through LSQR
+    model_coef, SH_arr, cov_SH_arr = compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vectors, mask, org_tot_size, calc_uncertainty=calc_uncertainty, max_order=96)
+
+    # Define EWH Grid
+    earth_grid_pot, earth_grid_EWH = compute_EWH_grid(SH_arr, elapsed_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx, file_name=f'EWH_{chosen_date}.xlsx')
+    
+    # Render Heatmap
+    render_single(earth_grid_EWH, str(chosen_date), elapsed_time, lat_range=lat_range, lon_range=lon_range)
+
+
+
+
+
+    # Determine Grid Spacing
+
+
+
 
 elif mod_choice == '5':
     # Print Confirmation Statement

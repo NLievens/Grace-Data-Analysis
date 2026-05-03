@@ -168,6 +168,16 @@ if mod_choice == '1':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Include Or Exclude J2
+    J2_choice = input("\nInclude C20? (⚠️  Warning: Dominates Other Coefficients) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if J2_choice == 'y':
+        J2 = True
+    
+    else:
+        J2 = False
+
     # Save Data To Excel
     xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
 
@@ -183,10 +193,12 @@ if mod_choice == '1':
     print(f"\nLatitude Precision  ➜  {lat_precis} Points")
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
-    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
+    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
+    print(f"C20 Coefficient     ➜  {'Included' if J2 else 'Excluded'}")
+    print(f"Excel Output        ➜  {'Single Date Heatmap.xlsx' if save_xlsx else 'None'}\n")
 
     # Define Gravity Values
-    earth_grid_acc = spherical_harmonics_date(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx, file_name='Single Date Heatmap.xlsx')
+    earth_grid_acc = spherical_harmonics_date(selected_data, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx, file_name='Single Date Heatmap.xlsx')
 
     # Render Heatmap
     render_single(earth_grid_acc, selected_date, lat_range=lat_range, lon_range=lon_range)
@@ -289,6 +301,16 @@ elif mod_choice == '2':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Include Or Exclude J2
+    J2_choice = input("\nInclude C20? (⚠️  Warning: Dominates Other Coefficients) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if J2_choice == 'y':
+        J2 = True
+    
+    else:
+        J2 = False
+
     # Save Data To Excel
     xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
 
@@ -304,12 +326,15 @@ elif mod_choice == '2':
     print(f"\nLatitude Precision  ➜  {lat_precis} Points")
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
-    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
+    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
+    print(f"C20 Coefficient     ➜  {'Included' if J2 else 'Excluded'}")
+    print(f"Excel Output 1      ➜  {f'Double Date Heatmap {selected_dates[0]}.xlsx' if save_xlsx else 'None'}")
+    print(f"Excel Output 2      ➜  {f'Double Date Heatmap {selected_dates[1]}.xlsx' if save_xlsx else 'None'}\n")
 
     # Define Gravity Values
-    earth_grid_acc_1 = spherical_harmonics_date(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
+    earth_grid_acc_1 = spherical_harmonics_date(selected_data[0], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx, file_name=f'Double Date Heatmap {selected_dates[0]}.xlsx')
     print()
-    earth_grid_acc_2 = spherical_harmonics_date(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
+    earth_grid_acc_2 = spherical_harmonics_date(selected_data[1], lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx, file_name=f'Double Date Heatmap {selected_dates[1]}.xlsx')
 
     # Render Heatmap
     render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=lat_range, lon_range=lon_range)
@@ -355,6 +380,16 @@ elif mod_choice == '3':
         lat_range = (np.radians(lat_min), np.radians(lat_max))
         lon_range = (np.radians(lon_min), np.radians(lon_max))
     
+    # Include Or Exclude J2
+    J2_choice = input("\nInclude C20? (⚠️  Warning: Dominates Other Coefficients) (Y/N): ").strip().lower()
+    custom_length += 2
+
+    if J2_choice == 'y':
+        J2 = True
+    
+    else:
+        J2 = False
+
     # Save Data To Excel
     xlsx_choice = input("\nSave Data To Excel? (Y/N): ").strip().lower()
 
@@ -370,10 +405,17 @@ elif mod_choice == '3':
     print(f"\nLatitude Precision  ➜  {lat_precis} Points")
     print(f"Longitude Precision ➜  {lon_precis} Points")
     print(f"Latitude Range      ➜  {lat_min:.2f}° to {lat_max:.2f}°")
-    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°\n")
+    print(f"Longitude Range     ➜  {lon_min:.2f}° to {lon_max:.2f}°")
+    print(f"C20 Coefficient     ➜  {'Included' if J2 else 'Excluded'}")
+    print(f"Excel Output        ➜  {'Baseline Gravity Field.xlsx' if save_xlsx else 'None'}\n")
 
     # Define Gravity Values
-    earth_grid_acc_avg = spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, save_xlsx=save_xlsx)
+    earth_grid_acc_avg = spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx)
+
+    # Print Average Grid Gravity Value
+    print(f"\nAverage Gravitaty   ➜  {np.mean(earth_grid_acc_avg):.5f} [m/s\u00B2]")
+    print(f"Max Gravity         ➜  {np.max(earth_grid_acc_avg):.5f} [m/s\u00B2]")
+    print(f"Min Gravity         ➜  {np.min(earth_grid_acc_avg):.5f} [m/s\u00B2]")
 
     # Render Heatmap
     render_single(earth_grid_acc_avg, "Baseline", lat_range=lat_range, lon_range=lon_range)

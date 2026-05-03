@@ -315,7 +315,8 @@ def spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=30, lon_p
         df_pot = format_grid(average_pot, "km\u00B2/s\u00B2")
         df_acc = format_grid(average_acc, "m/s\u00B2")
 
-        file_path = os.path.join("Gravity_Maps/Output", "Baseline Gravity Field.xlsx")
+        file_name = "Baseline Gravity Field.xlsx"
+        file_path = os.path.join("Gravity_Maps/Output", file_name)
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
 
         with pd.ExcelWriter(file_path, engine='openpyxl') as writer:
@@ -331,7 +332,7 @@ def spherical_harmonics_baseline(data_lib, sorted_date_lst, lat_precis=30, lon_p
                 for cell in row: cell.font = openpyxl.styles.Font(bold=True)
         wb.save(file_path)
 
-        print(f"\n✅ Done. Results saved to {file_path}")
+        print(f"\n✅ Results saved to {file_name}")
 
     return average_acc
 
@@ -373,7 +374,7 @@ def render_single(earth_grid_acc, date, lat_range=(-np.pi/2, np.pi/2), lon_range
     )
 
     # Aesthetics
-    plt.title(f"Gravity: {date}", fontsize=15, pad=20)
+    plt.title(f"Gravity [{date}]", fontsize=15, pad=20)
     gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.3)
     gl.top_labels = False
     gl.right_labels = False
@@ -431,7 +432,7 @@ def render_double(earth_grid_acc_1, earth_grid_acc_2, selected_dates, lat_range=
         )
         
         # Title and Gridlines
-        ax.set_title(f"Gravity {selected_dates[i]}", fontsize=14, pad=10)
+        ax.set_title(f"Gravity [{selected_dates[i]}]", fontsize=14, pad=10)
         
         gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.2)
         gl.top_labels = False

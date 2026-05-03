@@ -19,7 +19,7 @@ from Data.Data_Reader import *
 from Filters import *
 
 # Define Delta Harmonic Coefficients
-def compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96):
+def compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, reference_date, max_order=96):
     '''
     Computes the delta spherical harmonic coefficients for C and S, applies necessary corrections (geocenter, SLR, GIA), and prepares the data for LSQR regression.
 
@@ -27,6 +27,7 @@ def compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96
         data_year_arr (np.ndarray): 5D array containing the original spherical harmonic coefficients and their standard deviations, indexed by year and month.
         date_year_arr (np.ndarray): 2D array containing the corresponding date strings for each year and month.
         year_lst (list): List of years to consider for the analysis.
+
         max_order (int): Maximum spherical harmonic degree/order to consider (default is 96).
 
     Returns:
@@ -266,9 +267,6 @@ def compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vecto
     weighted_sst = np.sum(weights * (Y - Y_mean)**2)
     r_squared = 1 - (weighted_ssr / weighted_sst)
 
-    # Print Progress Statement
-    print("✅ Model Coefficients Computed (R-Squared: {:.4f})".format(r_squared))
-
     # Reconstruct 4D SH_arr
     full_reconstructed = np.zeros((org_tot_size, num_params))
     full_reconstructed[mask] = coeff_models
@@ -278,6 +276,10 @@ def compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vecto
     C_rec = full_reconstructed[:split].reshape(side, side, num_params)
     S_rec = full_reconstructed[split:].reshape(side, side, num_params)
     SH_arr = np.stack([C_rec, S_rec], axis=-1)
+
+    # Print Progress Statement
+    print(f"\n✅ Model Coef.      ➜  {coeff_models.shape}")
+    print(f"✅ R-Squared        ➜  {r_squared:.4f})\n")
 
     # Reconstruct 5D Covariance
     cov_SH_arr = None
@@ -494,7 +496,7 @@ def render_single(earth_grid_EWH, date, sample_time, lat_range=(-np.pi/2, np.pi/
         extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
         transform=ccrs.PlateCarree(),
         origin='upper', 
-        cmap='coolwarm', # RdBu_r, coolwarm
+        cmap='coolwarm',
         vmin=-limit, 
         vmax=limit,
         alpha=0.7,
@@ -502,7 +504,7 @@ def render_single(earth_grid_EWH, date, sample_time, lat_range=(-np.pi/2, np.pi/
     )
 
     # Aesthetics
-    plt.title(f"LSQR Model At t = {sample_time} Days ({date[:2]}-{date[2:4]}-{date[4:]})")
+    plt.title(f"LSQR Model At t = {sample_time} Days ({date[-2:]}-{date[5:7]}-{date[:4]})")
     gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.3)
     gl.top_labels = False
     gl.right_labels = False
@@ -514,7 +516,71 @@ def render_single(earth_grid_EWH, date, sample_time, lat_range=(-np.pi/2, np.pi/
     # Save and Show
     filename = f"LSQR_Analysis/Output/EWH_Plot_{date}.png"
     plt.savefig(filename, dpi=300, bbox_inches='tight')
-    print(f"\n✅ Map successfully rendered and saved to {filename}")
+    print(f"\n✅ Map Successfully Rendered And Saved To {filename}")
+    plt.show()
+
+    return
+
+# Define Double Plot Render
+def double_render(earth_grid_EWH_1, earth_grid_EWH_2, selected_dates, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi)):
+    # Convert Radians to Degrees for mapping
+    lon_deg = np.degrees(lon_range)
+    lat_deg = np.degrees(lat_range)
+
+    # Synchronize the Color Scale (vmin/vmax)
+    vmin = min(earth_grid_EWH_1.min(), earth_grid_EWH_2.min())
+    vmax = max(earth_grid_EWH_1.max(), earth_grid_EWH_2.max())
+
+    # Setup Figure with PlateCarree projection
+    projection = ccrs.PlateCarree()
+    fig, axes = plt.subplots(1, 2, figsize=(16, 4), 
+                             subplot_kw={'projection': projection})
+
+    data_grids = [earth_grid_EWH_1, earth_grid_EWH_2]
+
+    for i, ax in enumerate(axes):
+        # Set The Extent (Crop)
+        # This automatically handles the lat/lon window
+        ax.set_extent([lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]], crs=ccrs.PlateCarree())
+        
+        # Add Geographic Layers
+        ax.add_feature(cfeature.LAND, facecolor='lightgray', zorder=0)
+        ax.add_feature(cfeature.OCEAN, facecolor='aliceblue', zorder=0)
+        ax.add_feature(cfeature.COASTLINE, linewidth=0.8, zorder=2)
+        ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.4, zorder=2)
+        
+        # Plot the Data
+        im = ax.imshow(
+            data_grids[i],
+            extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
+            transform=ccrs.PlateCarree(),
+            origin='upper',
+            alpha=0.7,
+            cmap='coolwarm',
+            vmin=vmin,
+            vmax=vmax,
+            zorder=1
+        )
+        
+        # Title and Gridlines
+        ax.set_title(f"EWH [{selected_dates[i]}]", fontsize=14, pad=10)
+        
+        gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.2)
+        gl.top_labels = False
+        gl.right_labels = False
+        
+        # Only show latitude labels on the left-most plot to clean up the center
+        if i == 1:
+            gl.left_labels = False
+
+    # Shared Colorbar centered at the bottom
+    cbar = fig.colorbar(im, ax=axes, orientation='horizontal', fraction=0.05, pad=0.08)
+    cbar.set_label("Equivalent Water Height [mm]", fontsize=12)
+
+    # Save and Show
+    filename = f"LSQR_Analysis/Output/EWH_Plot_{selected_dates[0]}_&_{selected_dates[1]}.png"
+    plt.savefig(filename, dpi=300, bbox_inches='tight')
+    print(f"\n✅ Dual Map Successfully Rendered And Saved To {filename}")
     plt.show()
 
     return

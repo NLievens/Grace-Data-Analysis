@@ -1,0 +1,22 @@
+Data Reader
+- Cite and Validate all data
+
+Gravity Maps
+- Validate Results
+- Change excel output from colongitude to longitude
+
+LSQR Analysis
+- Remove Option 3 (Difference Between Two Dates)
+- Check And Validate Uncertainty Function
+- Allow for modal analysis (i.e. plot all 15 model coefficients in time for a certain Stokes Coefficient And Be able to scroll through them)
+- Allow for area analysis in time (i.e. instead of Gt difference between date and reference, plot it in time)
+- Allow to reuse area by exporting boundaries as .txt file and reimporting it during selection
+- Validate Results
+- Allow for J2 choice selection by user
+- EWH double days
+- Allow for reference date selection in single and double date (else assume first day of dataset)
+- Enable area analysis
+    - Greenland
+    - Antarctica
+- Change excel output from colongitude to longitude
+- Check And Validate Filters And Most Optimal Filter Parameters
