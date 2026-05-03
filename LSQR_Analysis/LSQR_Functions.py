@@ -115,7 +115,7 @@ def compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96
 
         # Filtering
         C_semi, S_semi = correlated_error_filter(C_orig, S_orig, max_order)
-        C_fil, S_fil = gaussian_filter(C_semi, S_semi)
+        C_fil, S_fil = gaussian_filter(C_semi, S_semi, smoothing_radius=350)
 
         # Append Data To Lists
         data_C.append(C_fil)
@@ -127,15 +127,24 @@ def compute_delta_harmonics(data_year_arr, date_year_arr, year_lst, max_order=96
     data_C_array = np.array(data_C)           # Shape (Months, 97, 97)
     data_S_array = np.array(data_S)           # Shape (Months, 97, 97)
     
+    '''
     # Define Delta Values By Subtracting Mean
     C_mean = np.mean(data_C_array, axis=0)      # Shape (97, 97) -> Mean Across Months For Each Coefficient
     S_mean = np.mean(data_S_array, axis=0)      # Shape (97, 97) -> Mean Across Months For Each Coefficient
 
     delta_C = data_C_array - C_mean
     delta_S = data_S_array - S_mean
+    '''
+
+    # Define Delta Values By Subtracting First Month (2002-01)
+    C_first = data_C_array[0]      # Shape (97, 97) -> First Month As Baseline
+    S_first = data_S_array[0]      # Shape (97, 97) -> First Month As Baseline
+
+    delta_C = data_C_array - C_first
+    delta_S = data_S_array - S_first
 
     # Create Global Mask
-    flat_mean = np.concatenate([C_mean.ravel(), S_mean.ravel()])
+    flat_mean = np.concatenate([C_first.ravel(), S_first.ravel()])
     mask = (flat_mean != 0)
     org_tot_size = len(flat_mean)
 
@@ -170,7 +179,7 @@ def T_row(ti):
     '''
 
     return np.array([ 
-        #1,                                              # 0 // Constant
+        1,                                              # 0 // Constant
         ti,                                             # 1 // Linear trend
         ti**2,                                          # 2 // Quadratic trend
         np.cos(2 * np.pi * ti / 365.2500),              # 3 // Annual (Cosine)
@@ -476,13 +485,18 @@ def render_single(earth_grid_EWH, date, sample_time, lat_range=(-np.pi/2, np.pi/
     ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
     ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
 
+    # Determine Color Scale Limits Based On Data Range
+    limit = np.nanmax(np.abs(earth_grid_EWH))
+
     # Overlay The Data (Extent: [min_lon, max_lon, min_lat, max_lat])
     im = ax.imshow(
         earth_grid_EWH, 
         extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
         transform=ccrs.PlateCarree(),
         origin='upper', 
-        cmap='coolwarm', 
+        cmap='coolwarm', # RdBu_r, coolwarm
+        vmin=-limit, 
+        vmax=limit,
         alpha=0.7,
         zorder=3 # Ensures data stays above the land/ocean colors
     )
