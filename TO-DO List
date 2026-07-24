@@ -18,5 +18,14 @@ LSQR Analysis
 - Enable area analysis
     - Greenland
     - Antarctica
+    - ...
 - Change excel output from colongitude to longitude
 - Check And Validate Filters And Most Optimal Filter Parameters
+
+General Notes
+- Remove Pycache files (also add to .gitignore?)
+- Add quickstart to README
+- Add results (e.g. heatmaps) to README
+- Remove TO-DO from repository
+- Remove data from repository (Also remove from history) and add as a release for the user to download and drop locally into data/
+- Add to README: "This repository is an independent rework of the data-processing pipeline originally developed with a 10-member team for [project/course name], refactored and extended individually afterward."
