@@ -29,3 +29,119 @@ General Notes
 - Remove TO-DO from repository
 - Remove data from repository (Also remove from history) and add as a release for the user to download and drop locally into data/
 - Add to README: "This repository is an independent rework of the data-processing pipeline originally developed with a 10-member team for [project/course name], refactored and extended individually afterward."
+
+
+TEST README
+# GRACE & GRACE-FO Gravity Data Processing
+
+Python pipeline for processing GRACE and GRACE-FO Level 2 satellite gravimetry data,
+generating gravity anomaly maps, and analyzing temporal mass-change trends (e.g. ice
+mass loss in Greenland/Antarctica) from spherical harmonic coefficients.
+
+> **Note:** This repository is an independent rework of a data-processing pipeline
+> originally developed with a 10-member team for a TU Delft research project on
+> ice mass change assessment in Greenland. This version has been individually
+> refactored and extended after the original project concluded.
+
+## Overview
+
+The pipeline covers three stages:
+
+1. **Data** — reads raw/parsed GRACE and GRACE-FO Level 2 spherical harmonic
+   coefficient data (2002 – Aug 2025).
+2. **Gravity_Maps** — converts spherical harmonic coefficients into gravity
+   values and renders single-date, double-date (comparative), and baseline
+   heatmaps of Earth's gravity field.
+3. **LSQR_Analysis** — applies signal filtering and weighted least-squares
+   regression to estimate equivalent water height (EWH) / mass change over
+   user-defined regions and time ranges.
+
+## Example Output
+
+<!-- TODO: Replace with final chosen images before linking from CV.
+     Suggested candidates already generated in this repo:
+     - Gravity_Maps/Saved Outputs/Gravity_Plot_Baseline.png
+     - Gravity_Maps/Saved Outputs/Gravity_Plot_01092005_01102005_&_01092020_01102020.png
+     - LSQR_Analysis/Output/EWH_Plot_25092005.png (or EWH_Plot_25092020.png)
+     Copy the chosen files into an `assets/` folder and update the paths below. -->
+
+**Baseline gravity field:**
+![Baseline gravity field heatmap](assets/baseline_gravity_field.png)
+
+**Equivalent water height / mass change (Greenland):**
+![EWH mass change plot](assets/ewh_greenland.png)
+
+## Quickstart
+
+```bash
+git clone https://github.com/NLievens/Grace-Data-Analysis.git
+cd Grace-Data-Analysis
+pip install -r requirements.txt
+```
+
+### Get the data
+
+Raw and parsed GRACE/GRACE-FO datasets are not tracked in this repository
+(too large for git). Download them from the **[Releases page](https://github.com/NLievens/Grace-Data-Analysis/releases)**
+<!-- TODO: create the release, upload zipped Data/ subfolders as release assets,
+     and update this link to point at the specific release tag if desired. -->
+and extract into the `Data/` folder so the structure looks like:
+
+```
+Data/
+├── Data_Reader.py
+├── GRACE/
+├── GRACE-FO/
+└── Parsed_Data/
+```
+
+### Render a gravity map
+
+```bash
+cd Gravity_Maps
+python main.py
+```
+
+Follow the CLI prompts to choose single-date, double-date, or baseline
+heatmap rendering, and optionally set spatial resolution / geographic bounds.
+Output is saved as PNG heatmaps and Excel exports under `Gravity_Maps/Saved Outputs/`.
+
+### Run mass-change / EWH analysis
+
+```bash
+cd LSQR_Analysis
+python main.py
+```
+
+Applies filtering and weighted least-squares regression to estimate mass
+change (equivalent water height) over a selected region and date range.
+Output is saved under `LSQR_Analysis/Output/`.
+
+## Requirements
+
+- Python 3.8+
+- numpy, scipy, pandas, cartopy, openpyxl, geopandas, matplotlib
+
+Install via:
+```bash
+pip install -r requirements.txt
+```
+
+## Repository Structure
+
+```
+Data/            Raw + parsed GRACE/GRACE-FO data (downloaded separately, see above)
+Gravity_Maps/    Spherical harmonic → gravity field heatmap rendering
+LSQR_Analysis/   Filtering + least-squares regression for mass-change analysis
+```
+
+## Acknowledgments
+
+Original project team: TU Delft research project, "Ice Mass Change Assessment
+in Greenland from NASA GRACE(-FO) Observations" (2025), 10-member team.
+This repository reflects an individually reworked version of the codebase.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
+
