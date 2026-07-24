@@ -29,7 +29,10 @@ General Notes
 - Remove TO-DO from repository
 - Remove data from repository (Also remove from history) and add as a release for the user to download and drop locally into data/
 - Add to README: "This repository is an independent rework of the data-processing pipeline originally developed with a 10-member team for [project/course name], refactored and extended individually afterward."
-
+- Update Minimum Python requirement
+- Use .toml files as input instead of menu
+    - Note: either make it a very intuitive .toml, add an explanation to the README, or keep the menu for first time users, which then also gives as an output a corresponding .toml file they can reuse
+- fix/remove sys.path.append(...) hacks
 
 TEST README
 # GRACE & GRACE-FO Gravity Data Processing
