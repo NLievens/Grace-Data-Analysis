@@ -598,14 +598,50 @@ elif mod_choice == '4':
     # Define EWH Grid
     earth_grid_pot, earth_grid_EWH = compute_EWH_grid(SH_arr, elapsed_time, lat_precis=lat_precis, lon_precis=lon_precis, lat_range=lat_range, lon_range=lon_range, J2=J2, save_xlsx=save_xlsx, file_name=f'EWH_{chosen_date}.xlsx')
     
-    # Render Heatmap
-    render_single(earth_grid_EWH, str(chosen_date), elapsed_time, lat_range=lat_range, lon_range=lon_range)
+    # Ask User Input For Analysis Zone
+    zone_choice = input("\nDefine New Analysis Zone? (Y/N): ").strip().lower()
+    # TODO: DEFINE ANTARCTICA/GREENLAND/... FIRST
+    if zone_choice == 'y':
+        clear_lines(1)
+        print("Input Analysis Zone In 'Fig. Zone Definition'")
+        print("Left Click   ➜  Add Point")
+        print("Right Click  ➜  Undo")
+        print("Enter        ➜  Save & Close")
+
+        # Greenland Zone Range
+        lat_range = (1.029, 1.449)
+        lon_range = (-1.291, -0.192)
+
+        grid_points = render_zone_selection(earth_grid_EWH, lat_range=lat_range, lon_range=lon_range)
 
 
 
+        # Title figure certain name
+
+        # After close plot -> Print Corner point list
+    
+    else:
+        clear_lines(1)
+        # Print Old/Saved Values
+
+
+    # Determine Analysis Zone
 
 
     # Determine Grid Spacing
+
+
+    # Show Result Of Grid Creation And Re-Iterate If User Wants To Change Settings
+
+
+
+
+    # Define EWH Change Over Grid Points
+
+
+
+
+    # Quantify Volume Change Through Integration Over Grid Points
 
 
 

@@ -18,5 +18,6 @@ LSQR Analysis
 - Enable area analysis
     - Greenland
     - Antarctica
+    - ...
 - Change excel output from colongitude to longitude
 - Check And Validate Filters And Most Optimal Filter Parameters

@@ -10,6 +10,7 @@ import pandas as pd
 import cartopy.crs as ccrs
 import matplotlib.pyplot as plt
 import cartopy.feature as cfeature
+from matplotlib.patches import Polygon
 from scipy.interpolate import interp1d
 from scipy.special import lpmv, factorial
 
@@ -279,7 +280,7 @@ def compute_model_coefficients(delta_t_lst, CS_delta_vectors, CS_std_delta_vecto
 
     # Print Progress Statement
     print(f"\n✅ Model Coef.      ➜  {coeff_models.shape}")
-    print(f"✅ R-Squared        ➜  {r_squared:.4f})\n")
+    print(f"✅ R-Squared        ➜  {r_squared:.4f}\n")
 
     # Reconstruct 5D Covariance
     cov_SH_arr = None
@@ -584,3 +585,94 @@ def double_render(earth_grid_EWH_1, earth_grid_EWH_2, selected_dates, lat_range=
     plt.show()
 
     return
+
+# ============================================================================
+# Zone Definition Functions
+# ============================================================================
+
+# Initialise Grid Points List
+grid_points = []
+
+# Order Grid Corner Points Clockwise
+def order_points_clockwise(points):
+    pts = np.array(points)
+    center = pts.mean(axis=0)
+    angles = np.arctan2(pts[:,1] - center[1], pts[:,0] - center[0])
+    return pts[np.argsort(angles)].tolist()
+
+# Redraw Polygon 
+def redraw_polygon(ax):
+    if len(grid_points) >= 3:
+        sorted_pts = order_points_clockwise(grid_points)
+        polygon_artist = Polygon(sorted_pts, closed=True, edgecolor='red', facecolor='none', linewidth=1)
+        ax.add_patch(polygon_artist)
+
+    if grid_points:
+        x, y = zip(*grid_points)
+        scatter = ax.plot(x, y, 'ro')[0]
+
+    plt.draw()
+
+def on_click(event):
+    if event.inaxes:
+        if event.button == 1:  # Left click to add
+            grid_points.append((event.xdata, event.ydata))
+        elif event.button == 3:  # Right click to remove last point
+            if grid_points:
+                grid_points.pop()
+        redraw_polygon(event.inaxes)
+
+def on_key(event):
+    if event.key == 'enter':
+        plt.close()  # Finish and close window
+
+def render_zone_selection(earth_grid_EWH, lat_range=(-np.pi/2, np.pi/2), lon_range=(-np.pi, np.pi)):
+    # Convert Input Ranges From Radians To Degrees
+    lon_deg = np.degrees(lon_range)
+    lat_deg = np.degrees(lat_range)
+
+    # Setup Plot And Projection
+    projection = ccrs.PlateCarree()
+    fig, ax = plt.subplots(figsize=(16, 8), subplot_kw={'projection': projection})
+
+    # Set The Map Extent, i.e. Crop
+    ax.set_extent([lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]], crs=ccrs.PlateCarree())
+
+    # Add Background Features 
+    ax.add_feature(cfeature.LAND, facecolor='lightgray')
+    ax.add_feature(cfeature.OCEAN, facecolor='aliceblue')
+    ax.add_feature(cfeature.COASTLINE, linewidth=0.8)
+    ax.add_feature(cfeature.BORDERS, linestyle=':', alpha=0.5)
+
+    # Determine Color Scale Limits Based On Data Range
+    limit = np.nanmax(np.abs(earth_grid_EWH))
+
+    # Overlay The Data (Extent: [min_lon, max_lon, min_lat, max_lat])
+    im = ax.imshow(
+        earth_grid_EWH, 
+        extent=[lon_deg[0], lon_deg[1], lat_deg[0], lat_deg[1]],
+        transform=ccrs.PlateCarree(),
+        origin='upper', 
+        cmap='coolwarm',
+        vmin=-limit, 
+        vmax=limit,
+        alpha=0.7,
+        zorder=3 # Ensures data stays above the land/ocean colors
+    )
+
+    # Aesthetics
+    plt.title(f"Define Analysis Zone")
+    gl = ax.gridlines(draw_labels=True, dms=True, x_inline=False, y_inline=False, alpha=0.3)
+    gl.top_labels = False
+    gl.right_labels = False
+
+    # Add Colorbar
+    cbar = plt.colorbar(im, ax=ax, orientation='vertical', pad=0.02, aspect=30)
+    cbar.set_label("Equivalent Water Height [mm]", fontsize=12)
+
+    # Update & Show
+    fig.canvas.mpl_connect('button_press_event', on_click)
+    fig.canvas.mpl_connect('key_press_event', on_key)
+    plt.show()
+
+    return grid_points
